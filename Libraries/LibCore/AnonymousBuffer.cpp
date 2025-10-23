@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Memory.h>
 #include <AK/Try.h>
 #include <LibCore/AnonymousBuffer.h>
 #include <LibCore/System.h>
@@ -23,6 +24,7 @@ ErrorOr<NonnullRefPtr<AnonymousBufferImpl>> AnonymousBufferImpl::create(int fd, 
     auto* data = mmap(nullptr, round_up_to_power_of_two(size, PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (data == MAP_FAILED)
         return Error::from_errno(errno);
+    secure_memzero(data, size);
     return AK::adopt_nonnull_ref_or_enomem(new (nothrow) AnonymousBufferImpl(fd, size, data));
 }
 

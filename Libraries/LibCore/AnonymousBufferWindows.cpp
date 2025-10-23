@@ -8,6 +8,7 @@
 #include <LibCore/AnonymousBuffer.h>
 #include <LibCore/System.h>
 
+#include <AK/Memory.h>
 #include <AK/Windows.h>
 
 namespace Core {
@@ -43,6 +44,7 @@ ErrorOr<NonnullRefPtr<AnonymousBufferImpl>> AnonymousBufferImpl::create(int fd, 
     if (!ptr)
         return Error::from_windows_error();
 
+    secure_memzero(ptr, size);
     return adopt_ref(*new AnonymousBufferImpl(fd, size, ptr));
 }
 

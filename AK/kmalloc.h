@@ -8,16 +8,17 @@
 #pragma once
 
 #include <AK/Checked.h>
+#include <AK/Memory.h>
 #include <AK/Platform.h>
 #include <new>
 #include <stdlib.h>
 
 #define kcalloc calloc
-#define kmalloc malloc
 #define kmalloc_good_size malloc_good_size
 
-inline void kfree_sized(void* ptr, size_t)
+inline void kfree_sized(void* ptr, size_t size)
 {
+    secure_memzero(ptr, size);
     free(ptr);
 }
 
@@ -34,6 +35,13 @@ inline size_t malloc_good_size(size_t size) { return size; }
 #endif
 
 using std::nothrow;
+
+inline void* kmalloc(size_t size)
+{
+    void* ret = malloc(size);
+    secure_memzero(ret, size); // secure_memzero will just return early if passed a nullptr, so we don't need to check here
+    return ret;
+}
 
 inline void* kmalloc_array(AK::Checked<size_t> a, AK::Checked<size_t> b)
 {
