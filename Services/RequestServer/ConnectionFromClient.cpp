@@ -8,6 +8,7 @@
 
 #include <AK/IDAllocator.h>
 #include <AK/NonnullOwnPtr.h>
+#include <AK/Random.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/EventLoop.h>
 #include <LibCore/Proxy.h>
@@ -910,7 +911,7 @@ void ConnectionFromClient::ensure_connection(URL::URL url, ::RequestServer::Cach
             return true;
         };
 
-        auto connect_only_request_id = get_random<i32>();
+        auto connect_only_request_id = crypto_random<i32>();
 
         auto request = make<ActiveRequest>(*this, m_curl_multi, easy, connect_only_request_id, 0);
         request->url = url;
