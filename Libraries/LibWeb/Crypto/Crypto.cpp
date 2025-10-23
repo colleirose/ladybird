@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Memory.h>
 #include <AK/Random.h>
 #include <AK/StringBuilder.h>
 #include <LibCrypto/SecureRandom.h>
@@ -135,6 +136,8 @@ ErrorOr<String> generate_random_uuid()
     TRY(builder.try_appendff("{:02x}{:02x}-", bytes[6], bytes[7]));
     TRY(builder.try_appendff("{:02x}{:02x}-", bytes[8], bytes[9]));
     TRY(builder.try_appendff("{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}", bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]));
+
+    secure_memzero(bytes, sizeof bytes);
 
     return builder.to_string();
 }

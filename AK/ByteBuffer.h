@@ -10,6 +10,7 @@
 #include <AK/Assertions.h>
 #include <AK/Badge.h>
 #include <AK/Error.h>
+#include <AK/Memory.h>
 #include <AK/Span.h>
 #include <AK/Types.h>
 #include <AK/kmalloc.h>
@@ -303,7 +304,7 @@ public:
 
     void zero_fill()
     {
-        __builtin_memset(data(), 0, m_size);
+        secure_memzero(data(), m_size);
     }
 
     operator Bytes() LIFETIME_BOUND { return bytes(); }

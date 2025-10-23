@@ -7,17 +7,18 @@
 #pragma once
 
 #include <AK/Atomic.h>
+#include <AK/Format.h>
 #include <AK/StdLibExtras.h>
 #include <AK/Types.h>
 #include <AK/kmalloc.h>
-#if !defined(AK_OS_WINDOWS)
-#    include <sys/mman.h>
-#else
-extern "C" __declspec(dllimport) void* __stdcall VirtualAlloc(void* lpAddress, size_t size, u32 flAllocationType, u32 flProtect);
-extern "C" __declspec(dllimport) bool __stdcall VirtualFree(void* lpAddress, size_t size, u32 dwFreeType);
+#if defined(AK_OS_WINDOWS)
 #    define MEM_COMMIT 0x00001000
 #    define PAGE_READWRITE 0x04
 #    define MEM_RELEASE 0x00008000
+extern "C" __declspec(dllimport) void* __stdcall VirtualAlloc(void* lpAddress, size_t size, u32 flAllocationType, u32 flProtect);
+extern "C" __declspec(dllimport) bool __stdcall VirtualFree(void* lpAddress, size_t size, u32 dwFreeType);
+#else
+#    include <sys/mman.h>
 #endif
 
 namespace AK {
@@ -82,7 +83,15 @@ public:
 
             if constexpr (use_mmap) {
 #if defined(AK_OS_WINDOWS)
-                VirtualFree((void*)chunk, m_chunk_size, MEM_RELEASE);
+                // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfree states regarding dwSize:
+                // "If the dwFreeType parameter is MEM_RELEASE, this parameter must be 0 (zero). The function frees the entire region that is reserved in the initial allocation call to VirtualAlloc."
+                BOOL status = VirtualFree((void*)chunk, 0, MEM_RELEASE);
+                // unlike munmap, there are many reasons why VirtualFree can fail, see previously linked documentation
+                // and it had been silently failing for a while after windows support was implemented in BumpAllocator, see https://discord.com/channels/1247070541085671459/1247090064480014443/1433288152524521583
+                // so, it seems that we should handle any possible errors here
+                if (!status) {
+                    warnln("VirtualFree failed with error {}", Error::from_windows_error());
+                }
 #else
                 munmap((void*)chunk, m_chunk_size);
 #endif
@@ -110,8 +119,6 @@ protected:
 
     bool allocate_a_chunk()
     {
-        // dbgln("Allocated {} entries in previous chunk and have {} unusable bytes", m_allocations_in_previous_chunk, m_chunk_size - m_byte_offset_into_current_chunk);
-        // m_allocations_in_previous_chunk = 0;
         void* new_chunk = reinterpret_cast<void*>(s_unused_allocation_cache.exchange(0));
         if (!new_chunk) {
             if constexpr (use_mmap) {
@@ -123,16 +130,24 @@ protected:
                 new_chunk = mmap(nullptr, m_chunk_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 #endif
 #if defined(AK_OS_WINDOWS)
-                if (new_chunk == NULL)
+                if (new_chunk == NULL) {
+                    warnln("VirtualAlloc failed with error {}", Error::from_windows_error());
                     return false;
+                }
 #else
-                if (new_chunk == MAP_FAILED)
+                if (new_chunk == MAP_FAILED) {
+                    warnln("mmap failed in BumpAllocator.h with error {}", errno);
                     return false;
+                }
 #endif
             } else {
                 new_chunk = kmalloc(m_chunk_size);
-                if (!new_chunk)
+                if (!new_chunk) {
+                    warnln("kmalloc failed in BumpAllocator.h");
                     return false;
+                }
+                // mmap and VirtualAlloc both initialize allocated memory to zero, so for consistency we should initialize the kmalloc memory
+                secure_memzero(new_chunk, m_chunk_size);
             }
         }
 
