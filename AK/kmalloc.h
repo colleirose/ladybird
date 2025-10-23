@@ -8,6 +8,7 @@
 #pragma once
 
 #include <AK/Checked.h>
+#include <AK/Memory.h>
 #include <AK/Platform.h>
 #include <new>
 #include <stdlib.h>
@@ -16,8 +17,9 @@
 #define kmalloc malloc
 #define kmalloc_good_size malloc_good_size
 
-inline void kfree_sized(void* ptr, size_t)
+inline void kfree_sized(void* ptr, size_t size)
 {
+    secure_memzero(ptr, size);
     free(ptr);
 }
 
