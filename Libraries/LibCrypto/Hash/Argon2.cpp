@@ -7,6 +7,7 @@
 #include <LibCrypto/Hash/Argon2.h>
 
 #include <AK/ByteBuffer.h>
+#include <AK/Memory.h>
 #include <LibCrypto/OpenSSL.h>
 
 #include <openssl/core_names.h>
@@ -86,6 +87,7 @@ ErrorOr<ByteBuffer> Argon2::derive_key(
     auto buf = TRY(ByteBuffer::create_uninitialized(tag_length));
     OPENSSL_TRY(EVP_KDF_derive(ctx.ptr(), buf.data(), tag_length, params));
 
+    secure_memzero(params, sizeof(params));
     return buf;
 }
 

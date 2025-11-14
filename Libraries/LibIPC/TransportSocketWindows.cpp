@@ -8,6 +8,7 @@
 #include <AK/ByteReader.h>
 #include <AK/Checked.h>
 #include <AK/Types.h>
+#include <LibCore/Windows/OwnedHandle.h>
 #include <LibIPC/HandleType.h>
 #include <LibIPC/Limits.h>
 #include <LibIPC/TransportSocketWindows.h>
@@ -64,10 +65,8 @@ ErrorOr<void> TransportSocketWindows::duplicate_handles(Bytes bytes, Vector<size
     HANDLE peer_process_handle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, m_peer_pid);
     if (!peer_process_handle)
         return Error::from_windows_error();
-    ScopeGuard guard = [&] { CloseHandle(peer_process_handle); };
 
     for (auto offset : handle_offsets) {
-
         auto span = bytes.slice(offset);
         if (span.size() < sizeof(HandleType))
             return Error::from_string_literal("Not enough bytes");
@@ -97,8 +96,8 @@ ErrorOr<void> TransportSocketWindows::duplicate_handles(Bytes bytes, Vector<size
             int handle = -1;
             ByteReader::load(span.data(), handle);
 
-            HANDLE new_handle = INVALID_HANDLE_VALUE;
-            if (!DuplicateHandle(GetCurrentProcess(), to_handle(handle), peer_process_handle, &new_handle, 0, FALSE, DUPLICATE_SAME_ACCESS))
+            Core::Windows::OwnedHandle new_handle = INVALID_HANDLE_VALUE;
+            if (!DuplicateHandle(GetCurrentProcess(), to_handle(handle), peer_process_handle, new_handle.put(), 0, FALSE, DUPLICATE_SAME_ACCESS))
                 return Error::from_windows_error();
 
             ByteReader::store(span.data(), to_fd(new_handle));

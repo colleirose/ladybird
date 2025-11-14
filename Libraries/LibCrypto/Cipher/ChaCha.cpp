@@ -52,6 +52,7 @@ ErrorOr<ByteBuffer> ChaCha20Poly1305::encrypt(ReadonlyBytes key, ReadonlyBytes n
     result.overwrite(0, ciphertext.data(), ciphertext.size());
     result.overwrite(ciphertext.size(), tag.data(), tag.size());
 
+    ciphertext.clear();
     return result;
 }
 
@@ -93,6 +94,7 @@ ErrorOr<ByteBuffer> ChaCha20Poly1305::decrypt(ReadonlyBytes key, ReadonlyBytes n
     int final_len = 0;
     OPENSSL_TRY(EVP_DecryptFinal_ex(ctx.ptr(), plaintext.data() + out_len, &final_len));
 
+    secure_memzero(ciphertext.data(), ciphertext_size);
     return plaintext.slice(0, out_len + final_len);
 }
 

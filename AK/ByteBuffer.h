@@ -10,6 +10,7 @@
 #include <AK/Assertions.h>
 #include <AK/Badge.h>
 #include <AK/Error.h>
+#include <AK/Memory.h>
 #include <AK/Span.h>
 #include <AK/Types.h>
 #include <AK/kmalloc.h>
@@ -175,8 +176,11 @@ public:
 
     void clear()
     {
-        if (!m_inline) {
-            kfree_sized(m_outline_buffer, m_outline_capacity);
+        // FIX-BEFORE-PR: does this work correctly
+        if (m_inline) {
+            secure_memzero(data(), capacity());
+        } else {
+            kfree_sized(data(), capacity());
             m_inline = true;
         }
         m_size = 0;

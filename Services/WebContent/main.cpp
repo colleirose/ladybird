@@ -33,6 +33,7 @@
 #include <LibWeb/WebIDL/Tracing.h>
 #include <LibWebView/Plugins/FontPlugin.h>
 #include <LibWebView/Plugins/ImageCodecPlugin.h>
+#include <LibWebView/Sandbox/Sandbox.h>
 #include <LibWebView/SiteIsolation.h>
 #include <LibWebView/Utilities.h>
 #include <WebContent/ConnectionFromClient.h>
@@ -62,6 +63,7 @@ static ErrorOr<void> reinitialize_image_decoder(IPC::File const& image_decoder_s
 ErrorOr<int> ladybird_main(Main::Arguments arguments)
 {
     AK::set_rich_debug_enabled(true);
+    TRY(WebView::Sandbox::ApplySyscallFiltersToCurrentProcess(WebView::ProcessType::WebContent));
 
 #if defined(AK_OS_WINDOWS)
     // NOTE: We need this here otherwise SDL inits COM in the APARTMENTTHREADED model which we don't want as we need to

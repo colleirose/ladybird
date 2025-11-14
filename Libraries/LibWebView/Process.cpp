@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2024, Andrew Kaster <akaster@serenityos.org>
+ * Copyright (c) 2025-2026, Colleirose <criticskate@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -11,6 +12,7 @@
 #include <LibCore/StandardPaths.h>
 #include <LibCore/System.h>
 #include <LibWebView/Process.h>
+#include <LibWebView/Sandbox/Sandbox.h>
 
 #include <fcntl.h>
 
@@ -34,7 +36,7 @@ Process::~Process()
         m_connection->shutdown();
 }
 
-ErrorOr<Process::ProcessAndIPCTransport> Process::spawn_and_connect_to_process(Core::ProcessSpawnOptions const& options, bool capture_output)
+ErrorOr<Process::ProcessAndIPCTransport> Process::spawn_and_connect_to_process(ProcessType type, Core::ProcessSpawnOptions const& options, bool capture_output)
 {
     // TODO: Mach IPC
 
@@ -56,6 +58,23 @@ ErrorOr<Process::ProcessAndIPCTransport> Process::spawn_and_connect_to_process(C
     Array<int, 2> stderr_pipe {};
 
     Core::ProcessSpawnOptions spawn_options = options;
+
+#if defined(AK_OS_LINUX)
+    Sandbox::LinuxSandboxPolicy policy = Sandbox::GetPolicyForProcessType(options.process_type);
+    if (policy.use_bubblewrap && Sandbox::IsBubblewrapSupported()) {
+        spawn_options.executable = ByteString("/usr/bin/bwrap");
+        spawn_options.arguments = TRY(Sandbox::CreateBwrapArguments(options));
+    }
+#elif defined(AK_OS_WINDOWS)
+    Sandbox::WindowsSandboxPolicy policy = Sandbox::GetPolicyForProcessType(options.process_type);
+    if (policy.use_appcontainer) {
+        spawn_options.windows_options.type = Core::StartupType::AttributeList;
+        spawn_options.windows_options.value = TRY(Sandbox::CreateAppContainerAttributesForPolicy(policy));
+    } else {
+        spawn_options.windows_options.type = Core::StartupType::Token;
+        spawn_options.windows_options.value = TRY(Sandbox::GetSandboxedPrimaryToken());
+    }
+#endif
 
     if (capture_output) {
         stdout_pipe = TRY(Core::System::pipe2(O_CLOEXEC));
@@ -121,12 +140,10 @@ ErrorOr<Optional<pid_t>> Process::get_process_pid(StringView process_name, Strin
 
     bool const process_not_found = [&pid]() {
 #if defined(AK_OS_WINDOWS)
-        HANDLE process_handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, *pid);
-        if (process_handle == nullptr)
+        Core::Windows::OwnedHandle process_handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, *pid);
+        if (!process_handle)
             return true;
 
-        // FIXME: We should create an RAII wrapper around HANDLE objects.
-        ScopeGuard handle_guard = [&process_handle] { CloseHandle(process_handle); };
         DWORD exit_code = 0;
 
         if (GetExitCodeProcess(process_handle, &exit_code) == 0)

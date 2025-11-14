@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2018-2021, Andreas Kling <andreas@ladybird.org>
  * Copyright (c) 2021, Daniel Bertalan <dani@danielbertalan.dev>
+ * Copyright (c) 2025-2026, Colleirose <criticskate@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -16,8 +17,9 @@
 #define kmalloc malloc
 #define kmalloc_good_size malloc_good_size
 
-inline void kfree_sized(void* ptr, size_t)
+ALWAYS_INLINE void kfree_sized(void* ptr, size_t size)
 {
+    secure_memzero(ptr, size);
     free(ptr);
 }
 

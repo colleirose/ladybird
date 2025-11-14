@@ -16,49 +16,8 @@
 #include <LibCore/Notifier.h>
 #include <LibCore/ThreadEventQueue.h>
 #include <LibCore/Timer.h>
+#include <LibCore/Windows/OwnedHandle.h>
 #include <LibThreading/Mutex.h>
-
-struct OwnHandle {
-    HANDLE handle = NULL;
-
-    explicit OwnHandle(HANDLE h = NULL)
-        : handle(h)
-    {
-    }
-
-    OwnHandle(OwnHandle&& h)
-    {
-        handle = h.handle;
-        h.handle = NULL;
-    }
-
-    // This operation can only be done when handle is NULL
-    OwnHandle& operator=(OwnHandle&& other)
-    {
-        VERIFY(!handle);
-        if (this == &other)
-            return *this;
-        handle = other.handle;
-        other.handle = NULL;
-        return *this;
-    }
-
-    ~OwnHandle()
-    {
-        if (handle)
-            CloseHandle(handle);
-    }
-
-    bool operator==(OwnHandle const& h) const { return handle == h.handle; }
-    bool operator==(HANDLE h) const { return handle == h; }
-};
-
-template<>
-struct Traits<OwnHandle> : DefaultTraits<OwnHandle> {
-    static unsigned hash(OwnHandle const& h) { return Traits<HANDLE>::hash(h.handle); }
-};
-template<>
-constexpr bool IsHashCompatible<HANDLE, OwnHandle> = true;
 
 namespace Core {
 
@@ -73,8 +32,8 @@ struct CompletionPacket {
 };
 
 struct EventLoopWake final : CompletionPacket {
-    OwnHandle wait_packet;
-    OwnHandle wait_event;
+    Windows::OwnedHandle wait_packet;
+    Windows::OwnedHandle wait_event;
 };
 
 struct EventLoopTimer final : CompletionPacket {
@@ -84,8 +43,8 @@ struct EventLoopTimer final : CompletionPacket {
         CancelWaitableTimer(timer.handle);
     }
 
-    OwnHandle timer;
-    OwnHandle wait_packet;
+    Windows::OwnedHandle timer;
+    Windows::OwnedHandle wait_packet;
     bool is_periodic;
     WeakPtr<EventReceiver> owner;
 };
@@ -97,8 +56,8 @@ struct EventLoopNotifier final : CompletionPacket {
     }
 
     Notifier* notifier;
-    OwnHandle wait_packet;
-    OwnHandle wait_event;
+    Windows::OwnedHandle wait_packet;
+    Windows::OwnedHandle wait_event;
 };
 
 struct ThreadData {
@@ -131,7 +90,7 @@ struct ThreadData {
         VERIFY(NT_SUCCESS(status));
     }
 
-    OwnHandle iocp;
+    Windows::OwnedHandle iocp;
 
     // These are only used to register and unregister. The event loop doesn't access these.
     HashMap<intptr_t, NonnullOwnPtr<EventLoopTimer>> timers;

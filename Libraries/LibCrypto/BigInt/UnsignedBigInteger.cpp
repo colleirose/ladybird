@@ -97,6 +97,9 @@ UnsignedBigInteger::UnsignedBigInteger()
 
 UnsignedBigInteger::~UnsignedBigInteger()
 {
+    // FIX-BEFORE-PR: May be incorrect, redo testing and stuff soon
+    VERIFY(m_mp.size <= m_mp.alloc);
+    secure_memzero(m_mp.dp, m_mp.size);
     mp_clear(&m_mp);
 }
 

@@ -48,8 +48,7 @@ ErrorOr<NonnullOwnPtr<MappedFile>> MappedFile::map_from_fd_and_close(int fd, [[m
         break;
     }
 
-    auto* ptr = TRY(Core::System::mmap(nullptr, size, protection, flags, fd, 0, 0, path));
-
+    void* ptr = TRY(Core::System::mmap(nullptr, size, protection, flags, fd, 0, 0, path));
     return adopt_own(*new MappedFile(ptr, size, mode));
 }
 

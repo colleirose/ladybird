@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Memory.h>
 #include <LibCrypto/PK/MLKEM.h>
 
 #include <LibCrypto/ASN1/DER.h>
@@ -218,6 +219,7 @@ ErrorOr<MLKEM::KeyPairType> MLKEM::generate_key_pair(MLKEMSize size, ByteBuffer 
     auto priv = TRY(get_byte_buffer_param_from_key(key, OSSL_PKEY_PARAM_PRIV_KEY));
     seed = TRY(get_byte_buffer_param_from_key(key, OSSL_PKEY_PARAM_ML_KEM_SEED));
 
+    secure_memzero(params, sizeof(params));
     return KeyPairType {
         MLKEMPublicKey { pub },
         { seed, pub, priv }

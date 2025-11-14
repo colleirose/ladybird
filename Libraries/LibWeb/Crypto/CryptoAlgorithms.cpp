@@ -911,10 +911,8 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> RSAOAEP::import_key(Web::Crypto::Algorit
 
         // 6. If an error occurred while parsing, or it can be determined that publicKey is not
         //    a valid public key according to [RFC3447], then throw a DataError.
-        auto maybe_valid = public_key.is_valid();
-        if (maybe_valid.is_error())
-            return WebIDL::DataError::create(m_realm, "Failed to verify key"_utf16);
-        if (!maybe_valid.value())
+        // NB: RSAPublicKey::is_valid is infallible, a parsing error will not occur.
+        if (!public_key.is_valid())
             return WebIDL::DataError::create(m_realm, "Invalid key"_utf16);
 
         // 7. Let key be a new CryptoKey that represents the RSA public key identified by publicKey.
@@ -1093,10 +1091,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> RSAOAEP::import_key(Web::Crypto::Algorit
             auto public_key = TRY(parse_jwk_rsa_public_key(realm, jwk));
 
             // 3. If publicKey can be determined to not be a valid RSA public key according to [RFC3447], then throw a DataError.
-            auto maybe_valid = public_key.is_valid();
-            if (maybe_valid.is_error())
-                return WebIDL::DataError::create(m_realm, "Failed to verify key"_utf16);
-            if (!maybe_valid.value())
+            if (!public_key.is_valid())
                 return WebIDL::DataError::create(m_realm, "Invalid key"_utf16);
 
             // 4. Let key be a new CryptoKey representing publicKey.
@@ -1494,10 +1489,8 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> RSAPSS::import_key(AlgorithmParams const
 
         // 6. If an error occurred while parsing, or it can be determined that publicKey is not
         //    a valid public key according to [RFC3447], then throw a DataError.
-        auto maybe_valid = public_key.is_valid();
-        if (maybe_valid.is_error())
-            return WebIDL::DataError::create(m_realm, "Failed to verify key"_utf16);
-        if (!maybe_valid.value())
+        // NB: RSAPublicKey::is_valid() is infallible. A parsing error will not occur at this point.
+        if (!public_key.is_valid())
             return WebIDL::DataError::create(m_realm, "Invalid key"_utf16);
 
         // 7. Let key be a new CryptoKey that represents the RSA public key identified by publicKey.
@@ -1675,10 +1668,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> RSAPSS::import_key(AlgorithmParams const
             auto public_key = TRY(parse_jwk_rsa_public_key(realm, jwk));
 
             // 3. If publicKey can be determined to not be a valid RSA public key according to [RFC3447], then throw a DataError.
-            auto maybe_valid = public_key.is_valid();
-            if (maybe_valid.is_error())
-                return WebIDL::DataError::create(m_realm, "Failed to verify key"_utf16);
-            if (!maybe_valid.value())
+            if (!public_key.is_valid())
                 return WebIDL::DataError::create(m_realm, "Invalid key"_utf16);
 
             // 4. Let key be a new CryptoKey representing publicKey.
@@ -2071,10 +2061,8 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> RSASSAPKCS1::import_key(AlgorithmParams 
 
         // 6. If an error occurred while parsing, or it can be determined that publicKey is not
         //    a valid public key according to [RFC3447], then throw a DataError.
-        auto maybe_valid = public_key.is_valid();
-        if (maybe_valid.is_error())
-            return WebIDL::DataError::create(m_realm, "Failed to verify key"_utf16);
-        if (!maybe_valid.value())
+        // NB: RSAPublicKey::is_valid() never throws an error
+        if (!public_key.is_valid())
             return WebIDL::DataError::create(m_realm, "Invalid key"_utf16);
 
         // 7. Let key be a new CryptoKey that represents the RSA public key identified by publicKey.
@@ -2252,10 +2240,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> RSASSAPKCS1::import_key(AlgorithmParams 
             auto public_key = TRY(parse_jwk_rsa_public_key(realm, jwk));
 
             // 3. If publicKey can be determined to not be a valid RSA public key according to [RFC3447], then throw a DataError.
-            auto maybe_valid = public_key.is_valid();
-            if (maybe_valid.is_error())
-                return WebIDL::DataError::create(m_realm, "Failed to verify key"_utf16);
-            if (!maybe_valid.value())
+            if (!public_key.is_valid())
                 return WebIDL::DataError::create(m_realm, "Invalid key"_utf16);
 
             // 4. Let key be a new CryptoKey representing publicKey.

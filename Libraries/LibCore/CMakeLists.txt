@@ -17,7 +17,12 @@ if (WIN32)
     list(APPEND SOURCES
         ProcessWindows.cpp
         SocketpairWindows.cpp
-        SystemWindows.cpp)
+        SystemWindows.cpp
+        Windows/Windows.cpp
+        Windows/WindowsMemory.cpp
+        Windows/AccessControl/SID.cpp
+        Windows/AccessControl/Token.cpp
+    )
 else()
     list(APPEND SOURCES
         Process.cpp

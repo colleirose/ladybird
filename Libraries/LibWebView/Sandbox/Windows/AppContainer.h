@@ -1,0 +1,27 @@
+/*
+ * Copyright (c) 2025, Colleirose <criticskate@pm.me>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+#pragma once
+
+#include "SandboxWindows.h"
+
+namespace WebView::Sandbox {
+
+enum class AppContainerCapability : u8 {
+    Networking,
+    Filesystem,
+    Location,
+    UserCertificates,
+};
+
+struct AppContainer {
+    PSID sid;
+    Vector<AppContainerCapability> capabilities;
+};
+
+ErrorOr<AppContainer> Sandbox::CreateAppContainer(Vector<AppContainerCapability> capabilities);
+
+}

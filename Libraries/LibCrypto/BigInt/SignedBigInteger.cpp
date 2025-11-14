@@ -94,6 +94,10 @@ SignedBigInteger::SignedBigInteger()
 
 SignedBigInteger::~SignedBigInteger()
 {
+    // FIX-BEFORE-PR: May be incorrect, redo testing and stuff soon
+    // do note that m_mp.alloc contains how much is actually allocated, but we only need to erase what is actually used
+    VERIFY(m_mp.size <= m_mp.alloc);
+    secure_memzero(m_mp.dp, m_mp.size);
     mp_clear(&m_mp);
 }
 
@@ -106,6 +110,7 @@ Bytes SignedBigInteger::export_data(Bytes data) const
 
 ErrorOr<SignedBigInteger> SignedBigInteger::from_base(u16 N, StringView str)
 {
+    // FIXME: SignedBigInteger and UnsignedBigInteger to/from base64 functions should be constant-time
     VERIFY(N <= 36);
     if (str.is_empty())
         return SignedBigInteger(0);

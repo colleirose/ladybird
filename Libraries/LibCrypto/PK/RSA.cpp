@@ -7,6 +7,7 @@
 
 #include <AK/ByteBuffer.h>
 #include <AK/Debug.h>
+#include <AK/Memory.h>
 #include <LibCrypto/ASN1/ASN1.h>
 #include <LibCrypto/ASN1/DER.h>
 #include <LibCrypto/ASN1/PEM.h>
@@ -222,7 +223,7 @@ static ErrorOr<OpenSSL_PKEY> private_key_to_openssl_pkey(RSAPrivateKey const& pr
 #undef OPENSSL_SET_KEY_PARAM_NOT_ZERO
 
 // https://www.rfc-editor.org/rfc/rfc3447.html#section-3.1
-ErrorOr<bool> RSAPublicKey::is_valid() const
+bool RSAPublicKey::is_valid() const
 {
     // In a valid RSA public key, the RSA modulus n is a product of u
     // distinct odd primes r_i, i = 1, 2, ..., u, where u >= 2, and the RSA

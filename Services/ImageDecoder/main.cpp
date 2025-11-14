@@ -12,6 +12,7 @@
 #include <LibCore/Process.h>
 #include <LibIPC/SingleServer.h>
 #include <LibMain/Main.h>
+#include <LibWebView/Sandbox/Sandbox.h>
 
 #if defined(AK_OS_MACOS)
 #    include <LibCore/Platform/ProcessStatisticsMach.h>
@@ -20,6 +21,7 @@
 ErrorOr<int> ladybird_main(Main::Arguments arguments)
 {
     AK::set_rich_debug_enabled(true);
+    TRY(WebView::Sandbox::ApplySyscallFiltersToCurrentProcess(WebView::ProcessType::ImageDecoder));
 
     Core::ArgsParser args_parser;
     StringView mach_server_name;

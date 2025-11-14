@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <AK/Base64.h>
 #include <AK/GenericLexer.h>
 #include <LibCrypto/ASN1/PEM.h>
+#include <LibCrypto/ConstantTimeBase64.h>
 
 namespace Crypto {
 
@@ -59,12 +59,23 @@ DecodedPEM decode_pem(ReadonlyBytes data)
                 decoded.type = pem_header_to_type(header_type);
                 break;
             }
-            auto b64decoded = decode_base64(lexer.consume_line().trim_whitespace(TrimMode::Right));
-            if (b64decoded.is_error()) {
-                dbgln("Failed to decode PEM: {}", b64decoded.error().string_literal());
+
+            auto val = lexer.consume_line().trim_whitespace(TrimMode::Right);
+            auto result;
+            if (decoded.type == PEMType::PublicKey || decoded.type == PEMType::RSAPublicKey) {
+                result = decode_base64(val);
+            } else {
+                result = decode_base64_constant_time(val);
+            }
+
+            if (result.is_error()) {
+                auto err = result.error().error;
+                dbgln("Failed to decode PEM: {}", err.string_literal());
                 return {};
             }
-            if (decoded.data.try_append(b64decoded.value().data(), b64decoded.value().size()).is_error()) {
+
+            auto b64decoded = result.value();
+            if (decoded.data.try_append(b64decoded.data(), b64decoded.size()).is_error()) {
                 dbgln("Failed to decode PEM, likely OOM condition");
                 return {};
             }
@@ -116,7 +127,12 @@ ErrorOr<Vector<DecodedPEM>> decode_pems(ReadonlyBytes data)
                 header_type = {};
                 break;
             }
-            auto b64decoded = TRY(decode_base64(lexer.consume_line().trim_whitespace(TrimMode::Right)));
+
+            auto val = lexer.consume_line().trim_whitespace(TrimMode::Right);
+            if (auto result = decode_base64_constant_time(val); result.is_error())
+                return result.error().error;
+
+            auto b64decoded = result.value();
             TRY(decoded.data.try_append(b64decoded.data(), b64decoded.size()));
             break;
         }
@@ -159,14 +175,20 @@ ErrorOr<ByteBuffer> encode_pem(ReadonlyBytes data, PEMType type)
         VERIFY_NOT_REACHED();
     }
 
-    auto b64encoded = TRY(encode_base64(data));
-
     TRY(encoded.try_append(block_start.bytes()));
 
     size_t to_read = 64;
+    auto b64encoded;
+    if (type == PEMType::PublicKey || type == PEMType::RSAPublicKey) {
+        b64encoded = TRY(encode_base64(data));
+    } else {
+        b64encoded = TRY(encode_base64_constant_time(data));
+    }
+
     for (size_t i = 0; i < b64encoded.bytes().size(); i += to_read) {
         if (i + to_read > b64encoded.bytes().size())
             to_read = b64encoded.bytes().size() - i;
+
         TRY(encoded.try_append(b64encoded.bytes().slice(i, to_read)));
         TRY(encoded.try_append("\n"sv.bytes()));
     }

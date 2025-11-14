@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Memory.h>
 #include <AK/Random.h>
 #include <AK/StringBuilder.h>
 #include <LibJS/Runtime/TypedArray.h>
@@ -57,7 +58,7 @@ WebIDL::ExceptionOr<GC::Root<WebIDL::ArrayBufferView>> Crypto::get_random_values
 
     auto typed_array_record = JS::make_typed_array_with_buffer_witness_record(typed_array, JS::ArrayBuffer::Order::SeqCst);
 
-    // IMPLEMENTATION DEFINED: If the viewed array buffer is out-of-bounds, throw a InvalidStateError and terminate the algorithm.
+    // IMPLEMENTATION DEFINED: If the viewed array buffer is out-of-bounds, throw an InvalidStateError and terminate the algorithm.
     if (JS::is_typed_array_out_of_bounds(typed_array_record))
         return WebIDL::InvalidStateError::create(realm(), Utf16String::formatted(JS::ErrorType::BufferOutOfBounds.format(), "TypedArray"sv));
 
@@ -135,6 +136,9 @@ ErrorOr<String> generate_random_uuid()
     TRY(builder.try_appendff("{:02x}{:02x}-", bytes[6], bytes[7]));
     TRY(builder.try_appendff("{:02x}{:02x}-", bytes[8], bytes[9]));
     TRY(builder.try_appendff("{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}", bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]));
+
+    // NB: Erase unneeded copies of the secret value from memory
+    secure_memzero(bytes, sizeof(bytes));
 
     return builder.to_string();
 }

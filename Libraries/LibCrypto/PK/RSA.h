@@ -35,7 +35,7 @@ public:
     UnsignedBigInteger const& public_exponent() const { return m_public_exponent; }
     size_t length() const { return m_length; }
 
-    ErrorOr<bool> is_valid() const;
+    bool is_valid() const;
 
     ErrorOr<ByteBuffer> export_as_der() const
     {

@@ -7,6 +7,7 @@
 
 #include <AK/Assertions.h>
 #include <AK/Format.h>
+#include <AK/Memory.h>
 #include <AK/Platform.h>
 #include <AK/Random.h>
 #include <AK/Vector.h>
@@ -34,7 +35,8 @@ namespace GC {
 BlockAllocator::~BlockAllocator()
 {
     for (auto* block : m_blocks) {
-        ASAN_UNPOISON_MEMORY_REGION(block, HeapBlock::BLOCK_SIZE);
+        UnpoisonMemoryRegion(block, HeapBlock::BLOCK_SIZE);
+
 #if defined(AK_OS_MACOS)
         kern_return_t kr = mach_vm_deallocate(mach_task_self(), reinterpret_cast<mach_vm_address_t>(block), HeapBlock::BLOCK_SIZE);
         VERIFY(kr == KERN_SUCCESS);
@@ -55,8 +57,9 @@ void* BlockAllocator::allocate_block([[maybe_unused]] char const* name)
         // To reduce predictability, take a random block from the cache.
         size_t random_index = get_random_uniform(m_blocks.size());
         auto* block = m_blocks.unstable_take(random_index);
-        ASAN_UNPOISON_MEMORY_REGION(block, HeapBlock::BLOCK_SIZE);
+        UnpoisonMemoryRegion(block, HeapBlock::BLOCK_SIZE);
         LSAN_REGISTER_ROOT_REGION(block, HeapBlock::BLOCK_SIZE);
+
 #if defined(MADV_FREE_REUSE) && defined(MADV_FREE_REUSABLE)
         if (madvise(block, HeapBlock::BLOCK_SIZE, MADV_FREE_REUSE) < 0) {
             perror("madvise(MADV_FREE_REUSE)");
@@ -121,7 +124,7 @@ void BlockAllocator::deallocate_block(void* block)
     }
 #endif
 
-    ASAN_POISON_MEMORY_REGION(block, HeapBlock::BLOCK_SIZE);
+    PoisonMemoryRegion(block, HeapBlock::BLOCK_SIZE);
     LSAN_UNREGISTER_ROOT_REGION(block, HeapBlock::BLOCK_SIZE);
     m_blocks.append(block);
 }

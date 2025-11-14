@@ -1,0 +1,15 @@
+{
+  "name": "libseccomp",
+  "version": "2.6.0",
+  "description": "The libseccomp library provides an easy-to-use and platform-independent interface to the Linux kernel's syscall filtering mechanism",
+  "homepage": "https://github.com/seccomp/libseccomp/tree/v2.6.0/",
+  "license": "LGPL-2.1",
+  "supports": "linux",
+  "dependencies": [
+    "pkgconf",
+    {
+      "name": "gperf",
+      "host": true
+    }
+  ]
+}

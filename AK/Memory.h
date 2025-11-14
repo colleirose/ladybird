@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2020, Andreas Kling <andreas@ladybird.org>
  * Copyright (c) 2021-2022, Brian Gianforcaro <bgianf@serenityos.org>
+ * Copyright (c) 2025-2026, Colleirose <criticskate@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -8,18 +9,14 @@
 #pragma once
 
 #include <AK/Types.h>
-#include <string.h>
 
 namespace AK {
 
-inline void secure_zero(void* ptr, size_t size)
-{
-    __builtin_memset(ptr, 0, size);
-    // The memory barrier is here to avoid the compiler optimizing
-    // away the memset when we rely on it for wiping secrets.
-    asm volatile("" ::
-            : "memory");
-}
+void secure_memzero(void* ptr, size_t size);
+
+void PoisonMemoryRegion(void* ptr, size_t size);
+
+void UnpoisonMemoryRegion(void* ptr, size_t size);
 
 // Naive implementation of a constant time buffer comparison function.
 // The goal being to not use any conditional branching so calls are
@@ -28,23 +25,23 @@ inline void secure_zero(void* ptr, size_t size)
 // See OpenBSD's timingsafe_memcmp for more advanced implementations.
 inline bool timing_safe_compare(void const* b1, void const* b2, size_t len)
 {
-    auto* c1 = static_cast<char const*>(b1);
-    auto* c2 = static_cast<char const*>(b2);
+    unsigned char const volatile* c1 = (unsigned char const volatile*)b1;
+    unsigned char const volatile* c2 = (unsigned char const volatile*)b2;
+    unsigned char volatile res = 0;
 
-    u8 res = 0;
     for (size_t i = 0; i < len; i++) {
         res |= c1[i] ^ c2[i];
     }
 
-    // FIXME: !res can potentially inject branches depending
-    // on which toolchain is being used for compilation. Ideally
-    // we would use a more advanced algorithm.
-    return !res;
+    unsigned char nonzero = (unsigned char)((res | -res) >> 7);
+    return (bool)(nonzero ^ 1);
 }
 
 }
 
 #if USING_AK_GLOBALLY
-using AK::secure_zero;
+using AK::PoisonMemoryRegion;
+using AK::secure_memzero;
 using AK::timing_safe_compare;
+using AK::UnpoisonMemoryRegion;
 #endif

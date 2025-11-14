@@ -4,6 +4,7 @@
  * Copyright (c) 2021-2024, Sam Atkins <atkinssj@serenityos.org>
  * Copyright (c) 2022, Matthias Zimmerman <matthias291999@gmail.com>
  * Copyright (c) 2026, Gregory Bertilson <gregory@ladybird.org>
+ * Copyright (c) 2025-2026, Colleirose <criticskate@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -20,6 +21,7 @@
 #include <limits.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <sys/auxv.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/time.h>
@@ -62,6 +64,126 @@ extern "C" {
 #if defined(AK_OS_HAIKU)
 #    include <image.h>
 #endif
+
+// Arm MTE is a CPU feature to automatically detect memory corruption. It's currently known to be supported on most Google CPUs and a few MediaTek CPUs.
+// Although there are some known flaws, it is a very promising and low-overhead memory corruption mitigation that has been shown to be effective in production.
+// For more information, see https://learn.arm.com/learning-paths/mobile-graphics-and-gaming/mte/mte/ and https://projectzero.google/2023/08/summary-mte-as-implemented.html
+// It's currently used for all memory allocated by Core::System::mmap() on supported systems.
+#if ARCH(AARCH64) && defined(AK_OS_LINUX)
+#    include <sys/prctl.h>
+
+// Constant values are from https://learn.arm.com/learning-paths/laptops-and-desktops/memory-tagged-dynamic-memory-allocator/how-to-2/ and https://docs.kernel.org/next/arm64/memory-tagging-extension.html
+// The Arm documentation recommends setting them because while they're supported by the modern Linux kernel, they aren't always defined in the headers.
+
+#    ifndef HWCAP2_MTE
+#        define HWCAP2_MTE (1 << 18)
+#    endif
+
+#    ifndef PR_SET_TAGGED_ADDR_CTRL
+#        define PR_SET_TAGGED_ADDR_CTRL 55
+#    endif
+
+#    ifndef PR_TAGGED_ADDR_ENABLE
+#        define PR_TAGGED_ADDR_ENABLE (1UL << 0)
+#    endif
+
+#    ifndef PROT_MTE
+#        define PROT_MTE 0x20
+#    endif
+
+// This one is from https://github.com/torvalds/linux/blob/162b42445b585cd89f45475848845db353539605/include/uapi/linux/prctl.h#L250
+// async is chosen over sync for performance reasons
+#    ifndef PR_MTE_TCF_ASYNC
+#        define PR_MTE_TCF_ASYNC (1UL << 2)
+#    endif
+
+#    ifndef PR_MTE_TAG_SHIFT
+#        define PR_MTE_TAG_SHIFT 3
+#    endif
+
+enum MteSupportCache {
+    Supported,
+    Unsupported,
+    NotChecked,
+};
+
+static MteSupportCache cached_mte_support = MteSupportCache::NotChecked;
+static bool performed_prctl = false;
+
+inline static bool IsMteSupportedForAllocationSize(size_t allocation_size)
+{
+    // Note that MTE allocation sizes must be a multiple of 16.
+    constexpr size_t mte_size_multiple = 16;
+    if (allocation_size == 0 || allocation_size % mte_size_multiple != 0)
+        return false;
+
+    if (cached_mte_support != MteSupportCache::NotChecked)
+        return cached_mte_support == MteSupportCache::Supported;
+
+    // First, we will test if the system declares MTE support.
+    if (!((getauxval(AT_HWCAP2)) & HWCAP2_MTE)) {
+        cached_mte_support = MteSupportCache::Unsupported;
+        return false;
+    }
+
+    if (!performed_prctl) {
+        int prctl_res = prctl(
+            PR_SET_TAGGED_ADDR_CTRL,
+            PR_TAGGED_ADDR_ENABLE | PR_MTE_TCF_ASYNC | (0xfffe << PR_MTE_TAG_SHIFT), 0, 0, 0);
+
+        if (prctl_res == -1) {
+            cached_mte_support = MteSupportCache::Unsupported;
+            auto prctl_err = Error::from_syscall("prctl"sv, errno).string_literal();
+            dbgln("We couldn't enable MTE. This probably means that your system doesn't support MTE, which is fine. Error: {}", prctl_err);
+            return false;
+        }
+
+        performed_prctl = true;
+    }
+
+    // Now we'll test that we are actually able to map an MTE-protected region without an error
+    int prot = PROT_READ | PROT_WRITE | PROT_MTE;
+    int flags = MAP_ANONYMOUS | MAP_PRIVATE;
+    void* ret = ::mmap(nullptr, mte_size_multiple, prot, flags, -1, 0);
+
+    if (ret) {
+        if (::munmap(ret, mte_size_multiple) != 0) {
+            // probably imposible
+            auto unmap_err = Error::from_syscall("munmap"sv, errno).string_literal();
+            warnln("Failed to unmap the MTE test allocation: {}", unmap_err);
+        }
+
+        cached_mte_support = MteSupportCache::Supported;
+        return true;
+    }
+
+    if (errno == ENOMEM) {
+        // Do not set the cache in this case.
+        // This is very unlikely to happen, but whatever.
+        warnln("The process is out of memory and MTE cannot be tested for.");
+        return false;
+    }
+
+    cached_mte_support = MteSupportCache::Unsupported;
+    auto map_err = Error::from_syscall("mmap"sv, errno).string_literal();
+    dbgln("We received an when mappping a memory region to test for MTE support. Unless other mapping errors occur after this point, this probably indicates that your system doesn't support MTE, which is fine. Error: {}", map_err);
+    return false;
+}
+
+static inline int AddMteToProtFlagsIfSupported(int prot_flags, size_t allocation_size)
+{
+    if (IsMteSupportedForAllocationSize(allocation_size))
+        prot_flags &= PROT_MTE;
+
+    return prot_flags;
+}
+
+#else
+static inline int AddMteToProtFlagsIfSupported(int prot_flags, size_t)
+{
+    return prot_flags;
+}
+#endif // ARCH(AARCH64) && defined(AK_OS_LINUX)
 
 namespace Core::System {
 
@@ -133,9 +255,12 @@ ErrorOr<void*> mmap(void* address, size_t size, int protection, int flags, int f
 {
     // NOTE: Regular POSIX mmap() doesn't support custom alignment requests.
     VERIFY(!alignment);
-    auto* ptr = ::mmap(address, size, protection, flags, fd, offset);
+
+    protection = AddMteToProtFlagsIfSupported(protection, size);
+    void* ptr = ::mmap(address, size, protection, flags, fd, offset);
     if (ptr == MAP_FAILED)
         return Error::from_syscall("mmap"sv, errno);
+
     return ptr;
 }
 

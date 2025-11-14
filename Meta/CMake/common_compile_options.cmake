@@ -71,7 +71,7 @@ endif()
 # FIXME: Rework these flags to remove the suspicious ones.
 if (WIN32)
     add_compile_options(-Wno-microsoft-unqualified-friend) # MSVC doesn't support unqualified friends
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS) # _s replacements not desired (or implemented on any other platform other than VxWorks)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS) # these don't work very well, and we have other safe functions; see the discussion at https://discord.com/channels/1247070541085671459/1247090064480014443/1433265382822514789
     add_compile_definitions(_CRT_NONSTDC_NO_WARNINGS) # POSIX names are just fine, thanks
     add_compile_definitions(_USE_MATH_DEFINES)
     add_compile_definitions(NOMINMAX)
@@ -173,13 +173,40 @@ if (UNIX AND NOT APPLE AND NOT ENABLE_FUZZERS)
     add_cxx_compile_options(-fvisibility-inlines-hidden)
 endif()
 
+# Hardening options
+# Ideas mostly from https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++
+add_cxx_compile_options(-Wtrampolines -fzero-init-padding-bits=all)
+add_cxx_compile_options(-fstack-clash-protection)
+add_cxx_compile_options(-D_FORTIFY_SOURCE=2)
+add_cxx_compile_options(-Wl,-z,noexecstack)
+add_cxx_compile_options(-fPIE -fPIC -pie)
+
+if (NOT MSVC)
+    add_cxx_compile_options(-fstrict-flex-arrays=2)
+endif()
+
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_cxx_compile_options(-fno-delete-null-pointer-checks -fno-strict-overflow -fno-strict-aliasing -ftrivial-auto-var-init=zero)
+endif()
+
+# A minimal undefined behavior sanitizer that is suitable for use in production
+# FIX-BEFORE-PR: Maybe I should remove this
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_cxx_compile_options(-fsanitize-trap=undefined)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang$")
+    add_cxx_compile_options(-fsanitize-minimal-runtime)
+endif()
+
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    add_cxx_compile_options(-mbranch-protection=standard)
+else()
+    add_cxx_compile_options(-fcf-protection=full)
+endif()
+
 if (NOT WIN32)
     add_cxx_compile_options(-fstack-protector-strong)
     add_cxx_link_options(-fstack-protector-strong)
 endif()
 
-if (NOT MSVC)
-    add_cxx_compile_options(-fstrict-flex-arrays=2)
-endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/sanitizers.cmake)

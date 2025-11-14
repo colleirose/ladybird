@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/IntrusiveList.h>
+#include <AK/Memory.h>
 #include <AK/Platform.h>
 #include <AK/StringView.h>
 #include <AK/Types.h>
@@ -42,9 +43,9 @@ public:
             allocated_cell = cell(m_next_lazy_freelist_index++);
         }
 
-        if (allocated_cell) {
-            ASAN_UNPOISON_MEMORY_REGION(allocated_cell, m_cell_size);
-        }
+        if (allocated_cell) [[likely]]
+            UnpoisonMemoryRegion(allocated_cell, m_cell_size);
+
         return allocated_cell;
     }
 

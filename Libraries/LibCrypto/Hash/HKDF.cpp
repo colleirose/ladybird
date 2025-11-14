@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Memory.h>
 #include <LibCrypto/Hash/HKDF.h>
 #include <LibCrypto/OpenSSL.h>
 
@@ -47,6 +48,7 @@ ErrorOr<ByteBuffer> HKDF::derive_key(Optional<ReadonlyBytes> maybe_salt, Readonl
     auto buf = TRY(ByteBuffer::create_uninitialized(key_length_bytes));
     OPENSSL_TRY(EVP_KDF_derive(ctx.ptr(), buf.data(), key_length_bytes, params));
 
+    secure_memzero(params, sizeof(params));
     return buf;
 }
 
