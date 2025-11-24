@@ -5,6 +5,7 @@
  */
 
 #include <AK/ConstrainedStream.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Debug.h>
 #include <AK/Endian.h>
 #include <AK/LEB128.h>

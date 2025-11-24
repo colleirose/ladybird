@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/QuickSort.h>
 #include <AK/StdLibExtras.h>
 #include <LibWeb/Layout/Box.h>

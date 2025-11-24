@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Optional.h>
 #include <LibGC/Root.h>
 #include <LibJS/Forward.h>

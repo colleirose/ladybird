@@ -8,6 +8,7 @@
  */
 
 #include <AK/Function.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/HashTable.h>
 #include <AK/ScopeGuard.h>
 #include <AK/StringBuilder.h>

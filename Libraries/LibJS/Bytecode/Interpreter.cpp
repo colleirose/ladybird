@@ -8,6 +8,7 @@
 #include <AK/Debug.h>
 #include <AK/HashTable.h>
 #include <AK/TemporaryChange.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <LibGC/RootHashMap.h>
 #include <LibJS/AST.h>
 #include <LibJS/Bytecode/BasicBlock.h>

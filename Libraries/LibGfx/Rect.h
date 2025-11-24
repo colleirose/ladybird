@@ -9,6 +9,7 @@
 #pragma once
 
 #include <AK/Format.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Vector.h>
 #include <LibGfx/AffineTransform.h>
 #include <LibGfx/Orientation.h>

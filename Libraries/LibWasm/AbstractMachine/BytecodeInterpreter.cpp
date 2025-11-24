@@ -6,6 +6,7 @@
  */
 
 #include <AK/Bitmap.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/ByteReader.h>
 #include <AK/Debug.h>
 #include <AK/Endian.h>

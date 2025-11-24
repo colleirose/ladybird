@@ -6,6 +6,7 @@
  */
 
 #include <AK/NonnullRawPtr.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/TypeCasts.h>
 #include <LibCore/DirIterator.h>
 #include <LibGC/CellAllocator.h>

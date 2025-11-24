@@ -8,6 +8,7 @@
  */
 
 #include <AK/Debug.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/SourceLocation.h>
 #include <AK/Utf32View.h>
 #include <LibTextCodec/Decoder.h>

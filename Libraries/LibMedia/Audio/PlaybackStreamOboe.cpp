@@ -6,6 +6,7 @@
 
 #include "PlaybackStreamOboe.h"
 #include <AK/Atomic.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/SourceLocation.h>
 #include <LibCore/SharedCircularQueue.h>
 #include <LibCore/ThreadedPromise.h>

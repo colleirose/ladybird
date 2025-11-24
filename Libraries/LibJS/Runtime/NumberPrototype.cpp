@@ -7,6 +7,7 @@
  */
 
 #include <AK/Array.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Function.h>
 #include <AK/StringFloatingPointConversions.h>
 #include <AK/TypeCasts.h>

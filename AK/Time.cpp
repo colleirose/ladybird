@@ -8,6 +8,7 @@
 #include <AK/Checked.h>
 #include <AK/DateConstants.h>
 #include <AK/GenericLexer.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/String.h>
 #include <AK/StringBuilder.h>
 #include <AK/Time.h>

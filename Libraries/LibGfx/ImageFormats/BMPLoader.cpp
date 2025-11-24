@@ -11,6 +11,7 @@
 #include <AK/Debug.h>
 #include <AK/Error.h>
 #include <AK/Function.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Try.h>
 #include <AK/Vector.h>
 #include <LibGfx/ImageFormats/BMPLoader.h>

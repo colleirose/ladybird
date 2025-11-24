@@ -1,0 +1,3 @@
+The libdivide library is header-only. To use it:
+
+    #include <libdivide.h>

@@ -7,6 +7,7 @@
 #include <AK/Array.h>
 #include <AK/Endian.h>
 #include <AK/FixedArray.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/LEB128.h>
 #include <AK/MemoryStream.h>
 #include <AK/Variant.h>

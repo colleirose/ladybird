@@ -11,6 +11,7 @@
 #include <AK/HashTable.h>
 #include <AK/JsonArray.h>
 #include <AK/JsonObject.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Platform.h>
 #include <AK/StackInfo.h>
 #include <AK/TemporaryChange.h>

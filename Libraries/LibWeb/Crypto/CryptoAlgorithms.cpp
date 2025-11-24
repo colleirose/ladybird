@@ -9,6 +9,7 @@
  */
 
 #include <AK/Base64.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/HashTable.h>
 #include <AK/QuickSort.h>
 #include <AK/Random.h>

@@ -5,6 +5,7 @@
  */
 
 #include "FFmpegLoader.h"
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/NumericLimits.h>
 #include <LibCore/System.h>
 

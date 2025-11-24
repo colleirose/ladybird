@@ -12,6 +12,7 @@
 #include <AK/FloatingPoint.h>
 #include <AK/NumericLimits.h>
 #include <AK/StdLibExtraDetails.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Types.h>
 
 namespace AK {

@@ -1,0 +1,7 @@
+{
+  "name": "libdivide",
+  "version": "5.2.0",
+  "description": "Thelibdivide.h is a header-only C/C++ library for optimizing integer division",
+  "homepage": "https://github.com/ridiculousfish/libdivide/tree/master",
+  "license": "zlib"
+}

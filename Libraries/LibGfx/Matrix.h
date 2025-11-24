@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Assertions.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/StdLibExtras.h>
 #include <AK/Types.h>
 #include <initializer_list>

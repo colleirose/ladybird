@@ -6,6 +6,7 @@
  */
 
 #include <AK/Array.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Checked.h>
 #include <AK/Endian.h>
 #include <AK/Enumerate.h>

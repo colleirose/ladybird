@@ -8,6 +8,7 @@
 
 #include <AK/Bitmap.h>
 #include <AK/Checked.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <LibGfx/Bitmap.h>
 #include <LibGfx/ShareableBitmap.h>
 #include <LibGfx/SkiaUtils.h>

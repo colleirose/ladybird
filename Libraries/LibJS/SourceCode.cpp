@@ -5,6 +5,7 @@
  */
 
 #include <AK/BinarySearch.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Utf8View.h>
 #include <LibJS/SourceCode.h>
 #include <LibJS/SourceRange.h>

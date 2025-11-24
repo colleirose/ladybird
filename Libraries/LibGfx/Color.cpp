@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/Assertions.h>
 #include <AK/ByteString.h>
 #include <AK/Optional.h>

@@ -201,12 +201,17 @@
     },
     "vulkan-headers",
     "woff2",
-    "zlib"
+    "zlib",
+    "libdivide"
   ],
   "overrides": [
     {
       "name": "angle",
       "version": "chromium_7258#0"
+    },
+    {
+      "name": "libdivide",
+      "version": "5.2.0"
     },
     {
       "name": "curl",

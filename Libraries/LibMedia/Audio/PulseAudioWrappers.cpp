@@ -6,6 +6,7 @@
 
 #include "PulseAudioWrappers.h"
 
+#include <AK/OptimizedIntegerDivision.h>
 #include <AK/WeakPtr.h>
 #include <LibThreading/Mutex.h>
 

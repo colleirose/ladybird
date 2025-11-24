@@ -1,0 +1,127 @@
+diff --git a/libdivide.h b/libdivide.h
+index 4d0720a..1f0d063 100644
+--- a/libdivide.h
++++ b/libdivide.h
+@@ -19,6 +19,9 @@
+ 
+ #include <stdint.h>
+ 
++#define LIBDIVIDE_LIKELY(x) __builtin_expect(!!(x), 1)
++#define LIBDIVIDE_UNLIKELY(x)  __builtin_expect(!!(x), 0)
++
+ #if !defined(__AVR__) && __STDC_HOSTED__ != 0
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -109,25 +112,21 @@
+ #endif
+ #endif
+ 
++// can't be exiting from a header file, we will deal with the scenarios that could cause these errors in our own code
++
+ #if defined(__AVR__) || __STDC_HOSTED__ == 0
+ #define LIBDIVIDE_ERROR(msg)
+ #else
+ #define LIBDIVIDE_ERROR(msg)                                                                     \
+-    do {                                                                                         \
+         fprintf(stderr, "libdivide.h:%d: %s(): Error: %s\n", __LINE__, LIBDIVIDE_FUNCTION, msg); \
+-        abort();                                                                                 \
+-    } while (0)
+ #endif
+ 
+ #if defined(LIBDIVIDE_ASSERTIONS_ON) && !defined(__AVR__) && __STDC_HOSTED__ != 0
+ #define LIBDIVIDE_ASSERT(x)                                                           \
+-    do {                                                                              \
+-        if (!(x)) {                                                                   \
+-            fprintf(stderr, "libdivide.h:%d: %s(): Assertion failed: %s\n", __LINE__, \
+-                LIBDIVIDE_FUNCTION, #x);                                              \
+-            abort();                                                                  \
+-        }                                                                             \
+-    } while (0)
++    if (LIBDIVIDE_UNLIKELY(!x)) {                                                                   \
++        fprintf(stderr, "libdivide.h:%d: %s(): Assertion failed: %s\n", __LINE__, \
++            LIBDIVIDE_FUNCTION, #x);                                              \
++    }
+ #else
+ #define LIBDIVIDE_ASSERT(x)
+ #endif
+@@ -771,7 +770,7 @@ static LIBDIVIDE_INLINE uint64_t libdivide_128_div_128_to_64(
+ 
+ static LIBDIVIDE_INLINE struct libdivide_u16_t libdivide_internal_u16_gen(
+     uint16_t d, int branchfree) {
+-    if (d == 0) {
++    if (LIBDIVIDE_UNLIKELY(d == 0)) {
+         LIBDIVIDE_ERROR("divider must be != 0");
+     }
+ 
+@@ -825,7 +824,7 @@ static LIBDIVIDE_INLINE struct libdivide_u16_t libdivide_u16_gen(uint16_t d) {
+ }
+ 
+ static LIBDIVIDE_INLINE struct libdivide_u16_branchfree_t libdivide_u16_branchfree_gen(uint16_t d) {
+-    if (d == 1) {
++    if (LIBDIVIDE_UNLIKELY(d == 1)) {
+         LIBDIVIDE_ERROR("branchfree divider must be != 1");
+     }
+     struct libdivide_u16_t tmp = libdivide_internal_u16_gen(d, 1);
+@@ -935,7 +934,7 @@ static LIBDIVIDE_INLINE uint16_t libdivide_u16_branchfree_recover(const struct l
+ 
+ static LIBDIVIDE_INLINE struct libdivide_u32_t libdivide_internal_u32_gen(
+     uint32_t d, int branchfree) {
+-    if (d == 0) {
++    if (LIBDIVIDE_UNLIKELY(d == 0)) {
+         LIBDIVIDE_ERROR("divider must be != 0");
+     }
+ 
+@@ -989,7 +988,7 @@ static LIBDIVIDE_INLINE struct libdivide_u32_t libdivide_u32_gen(uint32_t d) {
+ }
+ 
+ static LIBDIVIDE_INLINE struct libdivide_u32_branchfree_t libdivide_u32_branchfree_gen(uint32_t d) {
+-    if (d == 1) {
++    if (LIBDIVIDE_UNLIKELY(d == 1)) {
+         LIBDIVIDE_ERROR("branchfree divider must be != 1");
+     }
+     struct libdivide_u32_t tmp = libdivide_internal_u32_gen(d, 1);
+@@ -1096,7 +1095,7 @@ static LIBDIVIDE_INLINE uint32_t libdivide_u32_branchfree_recover(const struct l
+ 
+ static LIBDIVIDE_INLINE struct libdivide_u64_t libdivide_internal_u64_gen(
+     uint64_t d, int branchfree) {
+-    if (d == 0) {
++    if (LIBDIVIDE_UNLIKELY(d == 0)) {
+         LIBDIVIDE_ERROR("divider must be != 0");
+     }
+ 
+@@ -1152,7 +1151,7 @@ static LIBDIVIDE_INLINE struct libdivide_u64_t libdivide_u64_gen(uint64_t d) {
+ }
+ 
+ static LIBDIVIDE_INLINE struct libdivide_u64_branchfree_t libdivide_u64_branchfree_gen(uint64_t d) {
+-    if (d == 1) {
++    if (LIBDIVIDE_UNLIKELY(d == 1)) {
+         LIBDIVIDE_ERROR("branchfree divider must be != 1");
+     }
+     struct libdivide_u64_t tmp = libdivide_internal_u64_gen(d, 1);
+@@ -1271,7 +1270,7 @@ static LIBDIVIDE_INLINE uint64_t libdivide_u64_branchfree_recover(const struct l
+ 
+ static LIBDIVIDE_INLINE struct libdivide_s16_t libdivide_internal_s16_gen(
+     int16_t d, int branchfree) {
+-    if (d == 0) {
++    if (LIBDIVIDE_UNLIKELY(d == 0)) {
+         LIBDIVIDE_ERROR("divider must be != 0");
+     }
+ 
+@@ -1447,7 +1446,7 @@ static LIBDIVIDE_INLINE int16_t libdivide_s16_branchfree_recover(const struct li
+ 
+ static LIBDIVIDE_INLINE struct libdivide_s32_t libdivide_internal_s32_gen(
+     int32_t d, int branchfree) {
+-    if (d == 0) {
++    if (LIBDIVIDE_UNLIKELY(d == 0)) {
+         LIBDIVIDE_ERROR("divider must be != 0");
+     }
+ 
+@@ -1620,7 +1619,7 @@ static LIBDIVIDE_INLINE int32_t libdivide_s32_branchfree_recover(const struct li
+ 
+ static LIBDIVIDE_INLINE struct libdivide_s64_t libdivide_internal_s64_gen(
+     int64_t d, int branchfree) {
+-    if (d == 0) {
++    if (LIBDIVIDE_UNLIKELY(d == 0)) {
+         LIBDIVIDE_ERROR("divider must be != 0");
+     }
+ 

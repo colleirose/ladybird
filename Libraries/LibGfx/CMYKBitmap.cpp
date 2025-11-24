@@ -5,6 +5,7 @@
  */
 
 #include <AK/Checked.h>
+#include <AK/OptimizedIntegerDivision.h>
 #include <LibGfx/CMYKBitmap.h>
 
 namespace Gfx {
