@@ -361,7 +361,7 @@ Bytecode::CodeGenerationErrorOr<Optional<ScopedOperand>> UnaryExpression::genera
     if (src.has_value() && src.value().operand().is_constant()) {
         // OPTIMIZATION: Do some basic constant folding for unary operations on numbers.
         auto value = generator.get_constant(*src);
-        if (auto result = constant_fold_unary_expression(generator, value, m_op); !result.is_error())
+        if (auto result = constant_fold_unary_expression(generator, value, m_op); !result.is_error()) [[likely]]
             return result.release_value();
     }
 
@@ -589,7 +589,7 @@ Bytecode::CodeGenerationErrorOr<Optional<ScopedOperand>> AssignmentExpression::g
                         // Do nothing, this will be handled by PutById later.
                     } else if (expression.property().is_private_identifier()) {
                         // Do nothing, this will be handled by PutPrivateById later.
-                    } else {
+                    } else [[unlikely]] {
                         return Bytecode::CodeGenerationError {
                             &expression,
                             "Unimplemented non-computed member expression"sv
@@ -657,13 +657,13 @@ Bytecode::CodeGenerationErrorOr<Optional<ScopedOperand>> AssignmentExpression::g
                     } else if (expression.property().is_private_identifier()) {
                         auto identifier_table_ref = generator.intern_identifier(as<PrivateIdentifier>(expression.property()).string());
                         generator.emit<Bytecode::Op::PutPrivateById>(*base, identifier_table_ref, rval);
-                    } else {
+                    } else [[unlikely]] {
                         return Bytecode::CodeGenerationError {
                             &expression,
                             "Unimplemented non-computed member expression"sv
                         };
                     }
-                } else {
+                } else [[unlikely]] {
                     return Bytecode::CodeGenerationError {
                         lhs,
                         "Unimplemented/invalid node used a reference"sv
@@ -1389,7 +1389,7 @@ static Bytecode::CodeGenerationErrorOr<void> generate_object_binding_pattern_byt
             auto nested_value = generator.copy_if_needed_to_preserve_evaluation_order(value);
             TRY(binding_pattern.generate_bytecode(generator, initialization_mode, nested_value));
         } else if (alias.has<Empty>()) {
-            if (name.has<NonnullRefPtr<Expression const>>()) {
+            if (name.has<NonnullRefPtr<Expression const>>()) [[unlikely]] {
                 // This needs some sort of SetVariableByValue opcode, as it's a runtime binding
                 return Bytecode::CodeGenerationError {
                     name.get<NonnullRefPtr<Expression const>>().ptr(),

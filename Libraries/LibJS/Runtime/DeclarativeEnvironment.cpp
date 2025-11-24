@@ -57,7 +57,12 @@ ThrowCompletionOr<bool> DeclarativeEnvironment::has_binding(Utf16FlyString const
     auto binding_and_index = find_binding_and_index(name);
     if (!binding_and_index.has_value())
         return false;
-    if (!is_permanently_screwed_by_eval() && out_index && binding_and_index->index().has_value())
+
+    // NB: Return early in this case
+    if (is_permanently_screwed_by_eval()) [[unlikely]]
+        return true;
+
+    if (out_index && binding_and_index->index().has_value())
         *out_index = *(binding_and_index->index());
     return true;
 }

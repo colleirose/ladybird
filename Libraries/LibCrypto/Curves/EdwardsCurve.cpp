@@ -5,6 +5,7 @@
  */
 
 #include <AK/Array.h>
+#include <AK/Memory.h>
 #include <AK/ScopeGuard.h>
 #include <LibCrypto/Curves/EdwardsCurve.h>
 #include <LibCrypto/OpenSSL.h>
@@ -84,7 +85,7 @@ ErrorOr<ByteBuffer> SignatureEdwardsCurve::sign(ReadonlyBytes private_key, Reado
 static bool is_small_order_ed25519_point(ReadonlyBytes public_key)
 {
     // Ed25519 public keys are 32 bytes
-    if (public_key.size() != 32)
+    if (public_key.size() != 32) [[unlikely]]
         return false;
 
     // Known small-order points for Ed25519 curve
@@ -122,7 +123,7 @@ static bool is_small_order_ed25519_point(ReadonlyBytes public_key)
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F } } };
 
     for (auto const& small_order_point : small_order_points) {
-        if (public_key == small_order_point)
+        if (timing_safe_compare(public_key, small_order_point))
             return true;
     }
 
@@ -134,11 +135,11 @@ ErrorOr<bool> SignatureEdwardsCurve::verify(ReadonlyBytes public_key, ReadonlyBy
     // For Ed25519, reject small-order points for security
     // This is required by RFC 8032 and the Web Crypto API specification
     if (m_curve_type == EdwardsCurveType::Ed25519) {
-        if (is_small_order_ed25519_point(public_key))
+        if (is_small_order_ed25519_point(public_key)) [[unlikely]]
             return false;
 
         // Also check the R point in the signature (first 32 bytes) for small-order
-        if (signature.size() >= 32 && is_small_order_ed25519_point(signature.slice(0, 32)))
+        if (signature.size() >= 32 && is_small_order_ed25519_point(signature.slice(0, 32))) [[unlikely]]
             return false;
     }
 

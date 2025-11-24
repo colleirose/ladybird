@@ -142,7 +142,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::encrypt(AlgorithmIdentifier const& algori
 
     // 2. Let data be the result of getting a copy of the bytes held by the data parameter passed to the encrypt() method.
     auto data_or_error = WebIDL::get_buffer_source_copy(*data_parameter->raw_object());
-    if (data_or_error.is_error()) {
+    if (data_or_error.is_error()) [[unlikely]] {
         VERIFY(data_or_error.error().code() == ENOMEM);
         return WebIDL::create_rejected_promise_from_exception(realm, vm.throw_completion<JS::InternalError>(vm.error_message(JS::VM::ErrorMessage::OutOfMemory)));
     }
@@ -152,7 +152,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::encrypt(AlgorithmIdentifier const& algori
     auto normalized_algorithm = normalize_an_algorithm(realm, algorithm, "encrypt"_string);
 
     // 4. If an error occurred, return a Promise rejected with normalizedAlgorithm.
-    if (normalized_algorithm.is_error())
+    if (normalized_algorithm.is_error()) [[unlikely]]
         return WebIDL::create_rejected_promise_from_exception(realm, normalized_algorithm.release_error());
 
     // 5. Let promise be a new Promise.
@@ -165,20 +165,20 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::encrypt(AlgorithmIdentifier const& algori
         // 7. If the following steps or referenced procedures say to throw an error, reject promise with the returned error and then terminate the algorithm.
 
         // 8. If the name member of normalizedAlgorithm is not equal to the name attribute of the [[algorithm]] internal slot of key then throw an InvalidAccessError.
-        if (normalized_algorithm.parameter->name != key->algorithm_name()) {
+        if (normalized_algorithm.parameter->name != key->algorithm_name()) [[unlikely]] {
             WebIDL::reject_promise(realm, promise, WebIDL::InvalidAccessError::create(realm, "Algorithm mismatch"_utf16));
             return;
         }
 
         // 9. If the [[usages]] internal slot of key does not contain an entry that is "encrypt", then throw an InvalidAccessError.
-        if (!key->internal_usages().contains_slow(Bindings::KeyUsage::Encrypt)) {
+        if (!key->internal_usages().contains_slow(Bindings::KeyUsage::Encrypt)) [[unlikely]] {
             WebIDL::reject_promise(realm, promise, WebIDL::InvalidAccessError::create(realm, "Key does not support encryption"_utf16));
             return;
         }
 
         // 10. Let ciphertext be the result of performing the encrypt operation specified by normalizedAlgorithm using algorithm and key and with data as plaintext.
         auto cipher_text = normalized_algorithm.methods->encrypt(*normalized_algorithm.parameter, key, data);
-        if (cipher_text.is_error()) {
+        if (cipher_text.is_error()) [[unlikely]] {
             WebIDL::reject_promise(realm, promise, Bindings::exception_to_throw_completion(realm.vm(), cipher_text.release_error()).release_value());
             return;
         }
@@ -199,7 +199,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::decrypt(AlgorithmIdentifier const& algori
 
     // 2. Let data be the result of getting a copy of the bytes held by the data parameter passed to the decrypt() method.
     auto data_or_error = WebIDL::get_buffer_source_copy(*data_parameter->raw_object());
-    if (data_or_error.is_error()) {
+    if (data_or_error.is_error()) [[unlikely]] {
         VERIFY(data_or_error.error().code() == ENOMEM);
         return WebIDL::create_rejected_promise_from_exception(realm, vm.throw_completion<JS::InternalError>(vm.error_message(JS::VM::ErrorMessage::OutOfMemory)));
     }
@@ -209,7 +209,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::decrypt(AlgorithmIdentifier const& algori
     auto normalized_algorithm = normalize_an_algorithm(realm, algorithm, "decrypt"_string);
 
     // 4. If an error occurred, return a Promise rejected with normalizedAlgorithm.
-    if (normalized_algorithm.is_error())
+    if (normalized_algorithm.is_error()) [[unlikely]]
         return WebIDL::create_rejected_promise_from_exception(realm, normalized_algorithm.release_error());
 
     // 5. Let promise be a new Promise.
@@ -222,20 +222,20 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::decrypt(AlgorithmIdentifier const& algori
         // 7. If the following steps or referenced procedures say to throw an error, reject promise with the returned error and then terminate the algorithm.
 
         // 8. If the name member of normalizedAlgorithm is not equal to the name attribute of the [[algorithm]] internal slot of key then throw an InvalidAccessError.
-        if (normalized_algorithm.parameter->name != key->algorithm_name()) {
+        if (normalized_algorithm.parameter->name != key->algorithm_name()) [[unlikely]] {
             WebIDL::reject_promise(realm, promise, WebIDL::InvalidAccessError::create(realm, "Algorithm mismatch"_utf16));
             return;
         }
 
         // 9. If the [[usages]] internal slot of key does not contain an entry that is "decrypt", then throw an InvalidAccessError.
-        if (!key->internal_usages().contains_slow(Bindings::KeyUsage::Decrypt)) {
+        if (!key->internal_usages().contains_slow(Bindings::KeyUsage::Decrypt)) [[unlikely]] {
             WebIDL::reject_promise(realm, promise, WebIDL::InvalidAccessError::create(realm, "Key does not support encryption"_utf16));
             return;
         }
 
         // 10. Let plaintext be the result of performing the decrypt operation specified by normalizedAlgorithm using algorithm and key and with data as ciphertext.
         auto plain_text = normalized_algorithm.methods->decrypt(*normalized_algorithm.parameter, key, data);
-        if (plain_text.is_error()) {
+        if (plain_text.is_error()) [[unlikely]] {
             WebIDL::reject_promise(realm, promise, Bindings::exception_to_throw_completion(realm.vm(), plain_text.release_error()).release_value());
             return;
         }
@@ -257,7 +257,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::digest(AlgorithmIdentifier const& algorit
 
     // 2. Let data be the result of getting a copy of the bytes held by the data parameter passed to the digest() method.
     auto data_buffer_or_error = WebIDL::get_buffer_source_copy(*data->raw_object());
-    if (data_buffer_or_error.is_error()) {
+    if (data_buffer_or_error.is_error()) [[unlikely]] {
         VERIFY(data_buffer_or_error.error().code() == ENOMEM);
         return WebIDL::create_rejected_promise_from_exception(realm, vm.throw_completion<JS::InternalError>(vm.error_message(JS::VM::ErrorMessage::OutOfMemory)));
     }
@@ -268,7 +268,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::digest(AlgorithmIdentifier const& algorit
 
     // 4. If an error occurred, return a Promise rejected with normalizedAlgorithm.
     // FIXME: Spec bug: link to https://webidl.spec.whatwg.org/#a-promise-rejected-with
-    if (normalized_algorithm.is_error())
+    if (normalized_algorithm.is_error()) [[unlikely]]
         return WebIDL::create_rejected_promise_from_exception(realm, normalized_algorithm.release_error());
 
     // 5. Let promise be a new Promise.
@@ -283,7 +283,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::digest(AlgorithmIdentifier const& algorit
         // 8. Let result be the result of performing the digest operation specified by normalizedAlgorithm using algorithm, with data as message.
         auto result = algorithm_object.methods->digest(*algorithm_object.parameter, data_buffer);
 
-        if (result.is_exception()) {
+        if (result.is_exception()) [[unlikely]] {
             WebIDL::reject_promise(realm, promise, Bindings::exception_to_throw_completion(realm.vm(), result.release_error()).release_value());
             return;
         }

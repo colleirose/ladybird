@@ -6,6 +6,7 @@
  */
 
 #include <AK/Base64.h>
+#include <AK/Memory.h>
 #include <AK/Random.h>
 #include <LibCrypto/Hash/HashManager.h>
 #include <LibWebSocket/Impl/WebSocketImplSerenity.h>
@@ -631,6 +632,8 @@ void WebSocket::send_frame(WebSocket::OpCode op_code, ReadonlyBytes payload, boo
         for (size_t i = 0; i < payload.size(); ++i) {
             masked_payload[i] = payload[i] ^ (masking_key[i % 4]);
         }
+        // it's supposed to be secret data, so clear unneeded copies
+        secure_memzero(&masking_key, sizeof(masking_key));
         offset += payload.size();
     } else if (payload.size() > 0) {
         buf.overwrite(offset, payload.data(), payload.size());

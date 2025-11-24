@@ -322,12 +322,12 @@ public:
     ALWAYS_INLINE ThrowCompletionOr(ThrowCompletionOr&&) = default;
     ALWAYS_INLINE ThrowCompletionOr& operator=(ThrowCompletionOr&&) = default;
 
-    [[nodiscard]] bool is_throw_completion() const { return !m_value.is_special_empty_value(); }
-    [[nodiscard]] Completion throw_completion() const { return error(); }
+    [[nodiscard]] bool is_throw_completion() const { return [[unlikely]] !m_value.is_special_empty_value(); }
+    [[nodiscard]] __attribute__((cold)) Completion throw_completion() const { return error(); }
     [[nodiscard]] Value error_value() const { return m_value; }
 
     // These are for compatibility with the TRY() macro in AK.
-    [[nodiscard]] bool is_error() const { return !m_value.is_special_empty_value(); }
+    [[nodiscard]] bool is_error() const { return [[unlikely]] !m_value.is_special_empty_value(); }
     Empty release_value() { return {}; }
     Completion error() const { return Completion { Completion::Type::Throw, m_value }; }
     Completion release_error() { return error(); }

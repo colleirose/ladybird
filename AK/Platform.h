@@ -172,6 +172,11 @@
 #endif
 #define RETURNS_NONNULL __attribute__((returns_nonnull))
 
+#ifdef COLD
+#    undef COLD
+#endif
+#define COLD __attribute__((cold))
+
 #ifdef NO_SANITIZE_COVERAGE
 #    undef NO_SANITIZE_COVERAGE
 #endif

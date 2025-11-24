@@ -119,18 +119,22 @@ ErrorOr<bool> SECPxxxr1::verify(ReadonlyBytes hash, SECPxxxr1Point pubkey, SECPx
 
     auto sig_len = TRY([&] -> ErrorOr<int> {
         auto ret = i2d_ECDSA_SIG(sig_obj, &sig);
-        if (ret <= 0) {
+        if (ret <= 0) [[unlikely]] {
             OPENSSL_TRY(ret);
             VERIFY_NOT_REACHED();
         }
         return ret;
     }());
 
+    // > "Unlike other functions, the return value 0 from EVP_PKEY_verify() only indicates that the signature did not not verify successfully."
+    // > "A negative value indicates an error other than that signature verification failure."
     auto ret = EVP_PKEY_verify(ctx.ptr(), sig, sig_len, hash.data(), hash.size());
-    if (ret == 1)
+    if (ret == 1) [[likely]]
         return true;
-    if (ret == 0)
+
+    if (ret == 0) [[unlikely]]
         return false;
+
     OPENSSL_TRY(ret);
     VERIFY_NOT_REACHED();
 }

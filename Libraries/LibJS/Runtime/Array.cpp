@@ -161,7 +161,7 @@ ThrowCompletionOr<bool> Array::set_length(PropertyDescriptor const& property_des
 
     // NOTE: Continuation of step #17
     // iv. Return false.
-    if (!success)
+    if (!success) [[unlikely]]
         return false;
 
     // 19. Return true.
@@ -357,7 +357,7 @@ ThrowCompletionOr<bool> Array::internal_set(PropertyKey const& property_key, Val
             }
         } else if (property_key == vm.names.length) {
             auto property_descriptor = TRY(internal_get_own_property(property_key));
-            if (property_descriptor->writable.has_value() && !*property_descriptor->writable)
+            if (property_descriptor->writable.has_value() && !*property_descriptor->writable) [[unlikely]]
                 return false;
             property_descriptor->value = value;
             return TRY(set_length(*property_descriptor));
@@ -409,7 +409,7 @@ ThrowCompletionOr<bool> Array::internal_define_own_property(PropertyKey const& p
         }
 
         // i. If succeeded is false, return false.
-        if (!succeeded)
+        if (!succeeded) [[unlikely]]
             return false;
 
         // j. If index ≥ oldLen, then
@@ -442,7 +442,7 @@ ThrowCompletionOr<bool> Array::internal_has_property(PropertyKey const& property
 ThrowCompletionOr<bool> Array::internal_delete(PropertyKey const& property_key)
 {
     auto& vm = this->vm();
-    if (property_key.is_string() && property_key.as_string() == vm.names.length.as_string())
+    if (property_key.is_string() && property_key.as_string() == vm.names.length.as_string()) [[unlikely]]
         return false;
     return Object::internal_delete(property_key);
 }

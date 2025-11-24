@@ -7,6 +7,7 @@
 
 #include <AK/Debug.h>
 #include <AK/HashTable.h>
+#include <AK/Platform.h>
 #include <AK/TemporaryChange.h>
 #include <AK/OptimizedIntegerDivision.h>
 #include <LibGC/RootHashMap.h>
@@ -133,7 +134,7 @@ ThrowCompletionOr<Value> Interpreter::run(Script& script_record, GC::Ptr<Environ
     if (result.type() == Completion::Type::Normal) {
         auto executable_result = JS::Bytecode::Generator::generate_from_ast_node(vm, script, {});
 
-        if (executable_result.is_error()) {
+        if (executable_result.is_error()) [[unlikely]] {
             if (auto error_string = executable_result.error().to_string(); error_string.is_error())
                 result = vm.template throw_completion<JS::InternalError>(vm.error_message(JS::VM::ErrorMessage::OutOfMemory));
             else if (error_string = String::formatted("TODO({})", error_string.value()); error_string.is_error())
@@ -229,7 +230,7 @@ ThrowCompletionOr<Value> Interpreter::run(SourceTextModule& module)
     return js_undefined();
 }
 
-NEVER_INLINE Interpreter::HandleExceptionResponse Interpreter::handle_exception(u32& program_counter, Value exception)
+COLD NEVER_INLINE Interpreter::HandleExceptionResponse Interpreter::handle_exception(u32& program_counter, Value exception)
 {
     reg(Register::exception()) = exception;
     m_running_execution_context->scheduled_jump = {};
@@ -1766,14 +1767,16 @@ ThrowCompletionOr<void> Add::execute_impl(Bytecode::Interpreter& interpreter) co
 
     if (lhs.is_number() && rhs.is_number()) {
         if (lhs.is_int32() && rhs.is_int32()) {
-            if (!Checked<i32>::addition_would_overflow(lhs.as_i32(), rhs.as_i32())) {
-                interpreter.set(m_dst, Value(lhs.as_i32() + rhs.as_i32()));
+            if (Checked<i32>::addition_would_overflow(lhs.as_i32(), rhs.as_i32())) [[unlikely]] {
+                auto result = static_cast<i64>(lhs.as_i32()) + static_cast<i64>(rhs.as_i32());
+                interpreter.set(m_dst, Value(result, Value::CannotFitInInt32::Indeed));
                 return {};
             }
-            auto result = static_cast<i64>(lhs.as_i32()) + static_cast<i64>(rhs.as_i32());
-            interpreter.set(m_dst, Value(result, Value::CannotFitInInt32::Indeed));
+
+            interpreter.set(m_dst, Value(lhs.as_i32() + rhs.as_i32()));
             return {};
         }
+
         interpreter.set(m_dst, Value(lhs.as_double() + rhs.as_double()));
         return {};
     }
@@ -1788,16 +1791,18 @@ ThrowCompletionOr<void> Mul::execute_impl(Bytecode::Interpreter& interpreter) co
     auto const lhs = interpreter.get(m_lhs);
     auto const rhs = interpreter.get(m_rhs);
 
-    if (lhs.is_number() && rhs.is_number()) {
+    if (lhs.is_number() && rhs.is_number()) [[likely]] {
         if (lhs.is_int32() && rhs.is_int32()) {
-            if (!Checked<i32>::multiplication_would_overflow(lhs.as_i32(), rhs.as_i32())) {
-                interpreter.set(m_dst, Value(lhs.as_i32() * rhs.as_i32()));
+            if (Checked<i32>::multiplication_would_overflow(lhs.as_i32(), rhs.as_i32())) [[unlikely]] {
+                auto result = static_cast<i64>(lhs.as_i32()) * static_cast<i64>(rhs.as_i32());
+                interpreter.set(m_dst, Value(result, Value::CannotFitInInt32::Indeed));
                 return {};
             }
-            auto result = static_cast<i64>(lhs.as_i32()) * static_cast<i64>(rhs.as_i32());
-            interpreter.set(m_dst, Value(result, Value::CannotFitInInt32::Indeed));
+
+            interpreter.set(m_dst, Value(lhs.as_i32() * rhs.as_i32()));
             return {};
         }
+
         interpreter.set(m_dst, Value(lhs.as_double() * rhs.as_double()));
         return {};
     }
@@ -1827,16 +1832,18 @@ ThrowCompletionOr<void> Sub::execute_impl(Bytecode::Interpreter& interpreter) co
     auto const lhs = interpreter.get(m_lhs);
     auto const rhs = interpreter.get(m_rhs);
 
-    if (lhs.is_number() && rhs.is_number()) {
+    if (lhs.is_number() && rhs.is_number()) [[likely]] {
         if (lhs.is_int32() && rhs.is_int32()) {
-            if (!Checked<i32>::subtraction_would_overflow(lhs.as_i32(), rhs.as_i32())) {
-                interpreter.set(m_dst, Value(lhs.as_i32() - rhs.as_i32()));
+            if (Checked<i32>::subtraction_would_overflow(lhs.as_i32(), rhs.as_i32())) [[unlikely]] {
+                auto result = static_cast<i64>(lhs.as_i32()) - static_cast<i64>(rhs.as_i32());
+                interpreter.set(m_dst, Value(result, Value::CannotFitInInt32::Indeed));
                 return {};
             }
-            auto result = static_cast<i64>(lhs.as_i32()) - static_cast<i64>(rhs.as_i32());
-            interpreter.set(m_dst, Value(result, Value::CannotFitInInt32::Indeed));
+
+            interpreter.set(m_dst, Value(lhs.as_i32() - rhs.as_i32()));
             return {};
         }
+
         interpreter.set(m_dst, Value(lhs.as_double() - rhs.as_double()));
         return {};
     }
@@ -1931,7 +1938,7 @@ ThrowCompletionOr<void> LessThan::execute_impl(Bytecode::Interpreter& interprete
     auto& vm = interpreter.vm();
     auto const lhs = interpreter.get(m_lhs);
     auto const rhs = interpreter.get(m_rhs);
-    if (lhs.is_number() && rhs.is_number()) {
+    if (lhs.is_number() && rhs.is_number()) [[likely]] {
         if (lhs.is_int32() && rhs.is_int32()) {
             interpreter.set(m_dst, Value(lhs.as_i32() < rhs.as_i32()));
             return {};
@@ -1948,7 +1955,7 @@ ThrowCompletionOr<void> LessThanEquals::execute_impl(Bytecode::Interpreter& inte
     auto& vm = interpreter.vm();
     auto const lhs = interpreter.get(m_lhs);
     auto const rhs = interpreter.get(m_rhs);
-    if (lhs.is_number() && rhs.is_number()) {
+    if (lhs.is_number() && rhs.is_number()) [[likely]] {
         if (lhs.is_int32() && rhs.is_int32()) {
             interpreter.set(m_dst, Value(lhs.as_i32() <= rhs.as_i32()));
             return {};
@@ -1965,7 +1972,7 @@ ThrowCompletionOr<void> GreaterThan::execute_impl(Bytecode::Interpreter& interpr
     auto& vm = interpreter.vm();
     auto const lhs = interpreter.get(m_lhs);
     auto const rhs = interpreter.get(m_rhs);
-    if (lhs.is_number() && rhs.is_number()) {
+    if (lhs.is_number() && rhs.is_number()) [[likely]] {
         if (lhs.is_int32() && rhs.is_int32()) {
             interpreter.set(m_dst, Value(lhs.as_i32() > rhs.as_i32()));
             return {};
@@ -1982,7 +1989,7 @@ ThrowCompletionOr<void> GreaterThanEquals::execute_impl(Bytecode::Interpreter& i
     auto& vm = interpreter.vm();
     auto const lhs = interpreter.get(m_lhs);
     auto const rhs = interpreter.get(m_rhs);
-    if (lhs.is_number() && rhs.is_number()) {
+    if (lhs.is_number() && rhs.is_number()) [[likely]] {
         if (lhs.is_int32() && rhs.is_int32()) {
             interpreter.set(m_dst, Value(lhs.as_i32() >= rhs.as_i32()));
             return {};
@@ -2259,15 +2266,17 @@ ThrowCompletionOr<void> SetGlobal::execute_impl(Bytecode::Interpreter& interpret
         auto success = TRY(binding_object.internal_set(identifier, src, &binding_object, &cacheable_metadata));
         if (!success && strict() == Strict::Yes) {
             // Note: Nothing like this in the spec, this is here to produce nicer errors instead of the generic one thrown by Object::set().
+            if (vm.in_strict_mode()) {
+                auto property = binding_object.internal_get_own_property(identifier);
+                if (property.is_error()) {
+                    return vm.throw_completion<TypeError>(ErrorType::ObjectSetReturnedFalse);
+                }
 
-            auto property_or_error = binding_object.internal_get_own_property(identifier);
-            if (!property_or_error.is_error()) {
-                auto property = property_or_error.release_value();
+                property = property.release_value();
                 if (property.has_value() && !property->writable.value_or(true)) {
                     return vm.throw_completion<TypeError>(ErrorType::DescWriteNonWritable, identifier);
                 }
             }
-            return vm.throw_completion<TypeError>(ErrorType::ObjectSetReturnedFalse);
         }
         if (cacheable_metadata.type == CacheableSetPropertyMetadata::Type::ChangeOwnProperty) {
             cache.entries[0].shape = shape;

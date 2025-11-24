@@ -732,7 +732,7 @@ CodeGenerationErrorOr<Generator::ReferenceOperands> Generator::emit_load_from_re
             .loaded_value = loaded_value,
         };
     }
-    if (!is<MemberExpression>(node)) {
+    if (!is<MemberExpression>(node)) [[unlikely]] {
         return CodeGenerationError {
             &node,
             "Unimplemented/invalid node used as a reference"sv
@@ -810,50 +810,51 @@ CodeGenerationErrorOr<void> Generator::emit_store_to_reference(JS::ASTNode const
         emit_set_variable(identifier, value);
         return {};
     }
-    if (is<MemberExpression>(node)) {
-        auto& expression = static_cast<MemberExpression const&>(node);
 
-        // https://tc39.es/ecma262/#sec-super-keyword-runtime-semantics-evaluation
-        if (is<SuperExpression>(expression.object())) {
-            auto super_reference = TRY(emit_super_reference(expression));
-
-            // 4. Return the Reference Record { [[Base]]: baseValue, [[ReferencedName]]: propertyKey, [[Strict]]: strict, [[ThisValue]]: actualThis }.
-            if (super_reference.referenced_name.has_value()) {
-                // 5. Let propertyKey be ? ToPropertyKey(propertyNameValue).
-                // FIXME: This does ToPropertyKey out of order, which is observable by Symbol.toPrimitive!
-                emit_put_by_value_with_this(*super_reference.base, *super_reference.referenced_name, *super_reference.this_value, value, PutKind::Normal);
-            } else {
-                // 3. Let propertyKey be StringValue of IdentifierName.
-                auto identifier_table_ref = intern_identifier(as<Identifier>(expression.property()).string());
-                emit<Bytecode::Op::PutNormalByIdWithThis>(*super_reference.base, *super_reference.this_value, identifier_table_ref, value, next_property_lookup_cache());
-            }
-        } else {
-            auto object = TRY(expression.object().generate_bytecode(*this)).value();
-
-            if (expression.is_computed()) {
-                auto property = TRY(expression.property().generate_bytecode(*this)).value();
-                emit_put_by_value(object, property, value, PutKind::Normal, {});
-            } else if (expression.property().is_identifier()) {
-                auto identifier_table_ref = intern_identifier(as<Identifier>(expression.property()).string());
-                emit_put_by_id(object, identifier_table_ref, value, Bytecode::PutKind::Normal, next_property_lookup_cache());
-            } else if (expression.property().is_private_identifier()) {
-                auto identifier_table_ref = intern_identifier(as<PrivateIdentifier>(expression.property()).string());
-                emit<Bytecode::Op::PutPrivateById>(object, identifier_table_ref, value);
-            } else {
-                return CodeGenerationError {
-                    &expression,
-                    "Unimplemented non-computed member expression"sv
-                };
-            }
-        }
-
-        return {};
+    if (!is<MemberExpression>(node)) [[unlikely]] {
+        return CodeGenerationError {
+            &node,
+            "Unimplemented/invalid node used a reference"sv
+        };
     }
 
-    return CodeGenerationError {
-        &node,
-        "Unimplemented/invalid node used a reference"sv
-    };
+    auto& expression = static_cast<MemberExpression const&>(node);
+
+    // https://tc39.es/ecma262/#sec-super-keyword-runtime-semantics-evaluation
+    if (is<SuperExpression>(expression.object())) {
+        auto super_reference = TRY(emit_super_reference(expression));
+
+        // 4. Return the Reference Record { [[Base]]: baseValue, [[ReferencedName]]: propertyKey, [[Strict]]: strict, [[ThisValue]]: actualThis }.
+        if (super_reference.referenced_name.has_value()) {
+            // 5. Let propertyKey be ? ToPropertyKey(propertyNameValue).
+            // FIXME: This does ToPropertyKey out of order, which is observable by Symbol.toPrimitive!
+            emit_put_by_value_with_this(*super_reference.base, *super_reference.referenced_name, *super_reference.this_value, value, PutKind::Normal);
+        } else {
+            // 3. Let propertyKey be StringValue of IdentifierName.
+            auto identifier_table_ref = intern_identifier(as<Identifier>(expression.property()).string());
+            emit<Bytecode::Op::PutNormalByIdWithThis>(*super_reference.base, *super_reference.this_value, identifier_table_ref, value, next_property_lookup_cache());
+        }
+    } else {
+        auto object = TRY(expression.object().generate_bytecode(*this)).value();
+
+        if (expression.is_computed()) {
+            auto property = TRY(expression.property().generate_bytecode(*this)).value();
+            emit_put_by_value(object, property, value, PutKind::Normal, {});
+        } else if (expression.property().is_identifier()) {
+            auto identifier_table_ref = intern_identifier(as<Identifier>(expression.property()).string());
+            emit_put_by_id(object, identifier_table_ref, value, Bytecode::PutKind::Normal, next_property_lookup_cache());
+        } else if (expression.property().is_private_identifier()) {
+            auto identifier_table_ref = intern_identifier(as<PrivateIdentifier>(expression.property()).string());
+            emit<Bytecode::Op::PutPrivateById>(object, identifier_table_ref, value);
+        } else [[unlikely]] {
+            return CodeGenerationError {
+                &expression,
+                "Unimplemented non-computed member expression"sv
+            };
+        }
+    }
+
+    return {};
 }
 
 CodeGenerationErrorOr<void> Generator::emit_store_to_reference(ReferenceOperands const& reference, ScopedOperand value)
@@ -915,7 +916,7 @@ CodeGenerationErrorOr<Optional<ScopedOperand>> Generator::emit_delete_reference(
         } else if (expression.property().is_identifier()) {
             auto identifier_table_ref = intern_identifier(as<Identifier>(expression.property()).string());
             emit<Bytecode::Op::DeleteById>(dst, object, identifier_table_ref);
-        } else {
+        } else [[unlikely]] {
             // NOTE: Trying to delete a private field generates a SyntaxError in the parser.
             return CodeGenerationError {
                 &expression,
@@ -942,7 +943,7 @@ void Generator::emit_set_variable(JS::Identifier const& identifier, ScopedOperan
 {
     if (identifier.is_local()) {
         auto local_index = identifier.local_index();
-        if (value.operand().is_local() && local_index.is_variable() && value.operand().index() == local_index.index) {
+        if (value.operand().is_local() && local_index.is_variable() && value.operand().index() == local_index.index) [[unlikely]] {
             // Moving a local to itself is a no-op.
             return;
         }
