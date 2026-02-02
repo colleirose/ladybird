@@ -17,6 +17,7 @@
 #include <LibCrypto/ASN1/DER.h>
 #include <LibCrypto/Authentication/HMAC.h>
 #include <LibCrypto/Certificate/Certificate.h>
+#include <LibCrypto/ConstantTimeBase64.h>
 #include <LibCrypto/Cipher/AES.h>
 #include <LibCrypto/Cipher/ChaCha.h>
 #include <LibCrypto/Curves/EdwardsCurve.h>
@@ -98,6 +99,7 @@ static ::Crypto::UnsignedBigInteger big_integer_from_api_big_integer(GC::Ptr<JS:
     return ::Crypto::UnsignedBigInteger(0);
 }
 
+// FIX-BEFORE-PR: constant time
 // https://www.rfc-editor.org/rfc/rfc7518#section-2
 ErrorOr<String> base64_url_uint_encode(::Crypto::UnsignedBigInteger integer)
 {
@@ -110,14 +112,15 @@ ErrorOr<String> base64_url_uint_encode(::Crypto::UnsignedBigInteger integer)
 
     auto bytes = TRY(ByteBuffer::create_uninitialized(integer.byte_length()));
     auto result = integer.export_data(bytes.span());
-    return TRY(encode_base64url(result, AK::OmitPadding::Yes));
+    return TRY(SecureBase64UrlEncode(result, AK::OmitPadding::Yes));
 }
 
+// FIX-BEFORE-PR: correct type? constant time b64 needs stringview not stringm, is this still right?
 WebIDL::ExceptionOr<ByteBuffer> base64_url_bytes_decode(JS::Realm& realm, String const& base64_url_string)
 {
     auto& vm = realm.vm();
 
-    auto base64_bytes_or_error = decode_base64url(base64_url_string, AK::LastChunkHandling::Loose);
+    auto base64_bytes_or_error = Crypto::SecureBase64UrlDecode(base64_url_string);
     if (base64_bytes_or_error.is_error()) {
         if (base64_bytes_or_error.error().code() == ENOMEM)
             return vm.throw_completion<JS::InternalError>(vm.error_message(::JS::VM::ErrorMessage::OutOfMemory));
@@ -2679,7 +2682,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> AesCbc::export_key(Bindings::KeyFormat 
 
         // 3. Set the k attribute of jwk to be a string containing the raw octets of the key represented by [[handle]] internal slot of key, encoded according to Section 6.4 of JSON Web Algorithms [JWA].
         auto const& key_bytes = handle.get<ByteBuffer>();
-        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), encode_base64url(key_bytes, AK::OmitPadding::Yes));
+        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), Crypto::SecureBase64UrlEncode(key_bytes, AK::OmitPadding::Yes));
 
         // 4. -> If the length attribute of key is 128:
         //        Set the alg attribute of jwk to the string "A128CBC".
@@ -2879,7 +2882,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> AesCtr::export_key(Bindings::KeyFormat 
         // 3. Set the k attribute of jwk to be a string containing the raw octets of the key represented by [[handle]] internal slot of key,
         //    encoded according to Section 6.4 of JSON Web Algorithms [JWA].
         auto const& key_bytes = key->handle().get<ByteBuffer>();
-        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), encode_base64url(key_bytes, AK::OmitPadding::Yes));
+        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), Crypto::SecureBase64UrlEncode(key_bytes, AK::OmitPadding::Yes));
 
         // 4. -> If the length attribute of key is 128:
         //        Set the alg attribute of jwk to the string "A128CTR".
@@ -3192,7 +3195,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> AesGcm::export_key(Bindings::KeyFormat 
         // 3. Set the k attribute of jwk to be a string containing the raw octets of the key represented by [[handle]] internal slot of key,
         //    encoded according to Section 6.4 of JSON Web Algorithms [JWA].
         auto const& key_bytes = key->handle().get<ByteBuffer>();
-        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), encode_base64url(key_bytes, AK::OmitPadding::Yes));
+        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), Crypto::SecureBase64UrlEncode(key_bytes, AK::OmitPadding::Yes));
 
         // 4. -> If the length attribute of key is 128:
         //        Set the alg attribute of jwk to the string "A128GCM".
@@ -3537,7 +3540,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> AesKw::export_key(Bindings::KeyFormat f
         // 3. Set the k attribute of jwk to be a string containing the raw octets of the key represented by [[handle]] internal slot of key,
         //    encoded according to Section 6.4 of JSON Web Algorithms [JWA].
         auto const& key_bytes = key->handle().get<ByteBuffer>();
-        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), encode_base64url(key_bytes, AK::OmitPadding::Yes));
+        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), Crypto::SecureBase64UrlEncode(key_bytes, AK::OmitPadding::Yes));
 
         // 4. -> If the length attribute of key is 128:
         //        Set the alg attribute of jwk to the string "A128KW".
@@ -4364,7 +4367,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ECDSA::import_key(AlgorithmParams const&
             if (!jwk.x.has_value() || !jwk.y.has_value())
                 return WebIDL::DataError::create(m_realm, "Invalid key"_utf16);
 
-            auto maybe_x_bytes = decode_base64url(jwk.x.value());
+            auto maybe_x_bytes = Crypto::SecureBase64UrlDecode(jwk.x.value());
             if (maybe_x_bytes.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -4372,7 +4375,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ECDSA::import_key(AlgorithmParams const&
             if (x_bytes.size() != coord_size)
                 return WebIDL::DataError::create(m_realm, "Invalid key size"_utf16);
 
-            auto maybe_y_bytes = decode_base64url(jwk.y.value());
+            auto maybe_y_bytes = Crypto::SecureBase64UrlDecode(jwk.y.value());
             if (maybe_y_bytes.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -4389,7 +4392,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ECDSA::import_key(AlgorithmParams const&
             // If the d field is present:
             if (jwk.d.has_value()) {
                 // 1. If jwk does not meet the requirements of Section 6.2.2 of JSON Web Algorithms [JWA], then throw a DataError.
-                auto maybe_d_bytes = decode_base64url(jwk.d.value());
+                auto maybe_d_bytes = Crypto::SecureBase64UrlDecode(jwk.d.value());
                 if (maybe_d_bytes.is_error()) {
                     return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
                 }
@@ -4695,11 +4698,11 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ECDSA::export_key(Bindings::KeyFormat f
                 [&](::Crypto::PK::ECPublicKey const& public_key) -> ErrorOr<void> {
                     // 2. Set the x attribute of jwk according to the definition in Section 6.2.1.2 of JSON Web Algorithms [JWA].
                     auto x_bytes = TRY(public_key.x_bytes());
-                    jwk.x = TRY(encode_base64url(x_bytes, AK::OmitPadding::Yes));
+                    jwk.x = TRY(Crypto::SecureBase64UrlEncode(x_bytes, AK::OmitPadding::Yes));
 
                     // 3. Set the y attribute of jwk according to the definition in Section 6.2.1.3 of JSON Web Algorithms [JWA].
                     auto y_bytes = TRY(public_key.y_bytes());
-                    jwk.y = TRY(encode_base64url(y_bytes, AK::OmitPadding::Yes));
+                    jwk.y = TRY(Crypto::SecureBase64UrlEncode(y_bytes, AK::OmitPadding::Yes));
 
                     return {};
                 },
@@ -4723,10 +4726,10 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ECDSA::export_key(Bindings::KeyFormat f
                     auto y_bytes = TRY(public_key.y_bytes());
 
                     // 2. Set the x attribute of jwk according to the definition in Section 6.2.1.2 of JSON Web Algorithms [JWA].
-                    jwk.x = TRY(encode_base64url(x_bytes, AK::OmitPadding::Yes));
+                    jwk.x = TRY(Crypto::SecureBase64UrlEncode(x_bytes, AK::OmitPadding::Yes));
 
                     // 3. Set the y attribute of jwk according to the definition in Section 6.2.1.3 of JSON Web Algorithms [JWA].
-                    jwk.y = TRY(encode_base64url(y_bytes, AK::OmitPadding::Yes));
+                    jwk.y = TRY(Crypto::SecureBase64UrlEncode(y_bytes, AK::OmitPadding::Yes));
 
                     return {};
                 },
@@ -4743,7 +4746,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ECDSA::export_key(Bindings::KeyFormat f
                     [&](::Crypto::PK::ECPrivateKey const& private_key) -> ErrorOr<void> {
                         // Set the d attribute of jwk according to the definition in Section 6.2.2.1 of JSON Web Algorithms [JWA].
                         auto d_bytes = TRY(private_key.d_bytes());
-                        jwk.d = TRY(encode_base64url(d_bytes, AK::OmitPadding::Yes));
+                        jwk.d = TRY(Crypto::SecureBase64UrlEncode(d_bytes, AK::OmitPadding::Yes));
 
                         return {};
                     },
@@ -5319,7 +5322,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ECDH::import_key(AlgorithmParams const& 
             if (!jwk.x.has_value() || !jwk.y.has_value())
                 return WebIDL::DataError::create(m_realm, "Invalid key"_utf16);
 
-            auto maybe_x_bytes = decode_base64url(jwk.x.value());
+            auto maybe_x_bytes = Crypto::SecureBase64UrlDecode(jwk.x.value());
             if (maybe_x_bytes.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -5327,7 +5330,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ECDH::import_key(AlgorithmParams const& 
             if (x_bytes.size() != coord_size)
                 return WebIDL::DataError::create(m_realm, "Invalid key size"_utf16);
 
-            auto maybe_y_bytes = decode_base64url(jwk.y.value());
+            auto maybe_y_bytes = Crypto::SecureBase64UrlDecode(jwk.y.value());
             if (maybe_y_bytes.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -5344,7 +5347,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ECDH::import_key(AlgorithmParams const& 
             // If the d field is present:
             if (jwk.d.has_value()) {
                 // 1. If jwk does not meet the requirements of Section 6.2.2 of JSON Web Algorithms [JWA], then throw a DataError.
-                auto maybe_d_bytes = decode_base64url(jwk.d.value());
+                auto maybe_d_bytes = Crypto::SecureBase64UrlDecode(jwk.d.value());
                 if (maybe_d_bytes.is_error()) {
                     return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
                 }
@@ -5641,11 +5644,11 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ECDH::export_key(Bindings::KeyFormat fo
                 [&](::Crypto::PK::ECPublicKey const& public_key) -> ErrorOr<void> {
                     // 2. Set the x attribute of jwk according to the definition in Section 6.2.1.2 of JSON Web Algorithms [JWA].
                     auto x_bytes = TRY(public_key.x_bytes());
-                    jwk.x = TRY(encode_base64url(x_bytes, AK::OmitPadding::Yes));
+                    jwk.x = TRY(Crypto::SecureBase64UrlEncode(x_bytes, AK::OmitPadding::Yes));
 
                     // 3. Set the y attribute of jwk according to the definition in Section 6.2.1.3 of JSON Web Algorithms [JWA].
                     auto y_bytes = TRY(public_key.y_bytes());
-                    jwk.y = TRY(encode_base64url(y_bytes, AK::OmitPadding::Yes));
+                    jwk.y = TRY(Crypto::SecureBase64UrlEncode(y_bytes, AK::OmitPadding::Yes));
 
                     return {};
                 },
@@ -5669,10 +5672,10 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ECDH::export_key(Bindings::KeyFormat fo
                     auto y_bytes = TRY(public_key.y_bytes());
 
                     // 2. Set the x attribute of jwk according to the definition in Section 6.2.1.2 of JSON Web Algorithms [JWA].
-                    jwk.x = TRY(encode_base64url(x_bytes, AK::OmitPadding::Yes));
+                    jwk.x = TRY(Crypto::SecureBase64UrlEncode(x_bytes, AK::OmitPadding::Yes));
 
                     // 3. Set the y attribute of jwk according to the definition in Section 6.2.1.3 of JSON Web Algorithms [JWA].
-                    jwk.y = TRY(encode_base64url(y_bytes, AK::OmitPadding::Yes));
+                    jwk.y = TRY(Crypto::SecureBase64UrlEncode(y_bytes, AK::OmitPadding::Yes));
 
                     return {};
                 },
@@ -5689,7 +5692,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ECDH::export_key(Bindings::KeyFormat fo
                     [&](::Crypto::PK::ECPrivateKey const& private_key) -> ErrorOr<void> {
                         // Set the d attribute of jwk according to the definition in Section 6.2.2.1 of JSON Web Algorithms [JWA].
                         auto d_bytes = TRY(private_key.d_bytes());
-                        jwk.d = TRY(encode_base64url(d_bytes, AK::OmitPadding::Yes));
+                        jwk.d = TRY(Crypto::SecureBase64UrlEncode(d_bytes, AK::OmitPadding::Yes));
 
                         return {};
                     },
@@ -6000,7 +6003,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ED25519::import_key(
 
             // 2. Let key be a new CryptoKey object that represents the Ed25519 private key identified by interpreting jwk according to Section 2 of [RFC8037].
             auto private_key_base_64 = jwk.d.value();
-            auto private_key_or_error = decode_base64url(private_key_base_64);
+            auto private_key_or_error = Crypto::SecureBase64UrlDecode(private_key_base_64);
             if (private_key_or_error.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -6033,7 +6036,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ED25519::import_key(
 
             // 2. Let key be a new CryptoKey object that represents the Ed25519 public key identified by interpreting jwk according to Section 2 of [RFC8037].
             auto public_key_base_64 = jwk.x.value();
-            auto public_key_or_error = decode_base64url(public_key_base_64);
+            auto public_key_or_error = Crypto::SecureBase64UrlDecode(public_key_base_64);
             if (public_key_or_error.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -6161,7 +6164,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ED25519::export_key(Bindings::KeyFormat
 
         // 5. Set the x attribute of jwk according to the definition in Section 2 of [RFC8037].
         if (key->type() == Bindings::KeyType::Public) {
-            jwk.x = TRY_OR_THROW_OOM(vm, encode_base64url(key_data, AK::OmitPadding::Yes));
+            jwk.x = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(key_data, AK::OmitPadding::Yes));
         } else {
             // The "x" parameter of the "epk" field is set as follows:
             // Apply the appropriate ECDH function to the ephemeral private key (as scalar input)
@@ -6169,13 +6172,13 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ED25519::export_key(Bindings::KeyFormat
             // The base64url encoding of the output is the value for the "x" parameter of the "epk" field.
             ::Crypto::Curves::Ed25519 curve;
             auto public_key = TRY_OR_THROW_OOM(vm, curve.generate_public_key(key_data));
-            jwk.x = TRY_OR_THROW_OOM(vm, encode_base64url(public_key, AK::OmitPadding::Yes));
+            jwk.x = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(public_key, AK::OmitPadding::Yes));
         }
 
         // 6. If the [[type]] internal slot of key is "private"
         if (key->type() == Bindings::KeyType::Private) {
             // 1. Set the d attribute of jwk according to the definition in Section 2 of [RFC8037].
-            jwk.d = TRY_OR_THROW_OOM(vm, encode_base64url(key_data, AK::OmitPadding::Yes));
+            jwk.d = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(key_data, AK::OmitPadding::Yes));
         }
 
         // 7. Set the key_ops attribute of jwk to the usages attribute of key.
@@ -6505,7 +6508,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ED448::import_key(
 
             // 2. Let key be a new CryptoKey object that represents the Ed448 private key identified by interpreting jwk according to Section 2 of [RFC8037].
             auto private_key_base_64 = jwk.d.value();
-            auto private_key_or_error = decode_base64url(private_key_base_64);
+            auto private_key_or_error = Crypto::SecureBase64UrlDecode(private_key_base_64);
             if (private_key_or_error.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -6538,7 +6541,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ED448::import_key(
 
             // 2. Let key be a new CryptoKey object that represents the Ed448 public key identified by interpreting jwk according to Section 2 of [RFC8037].
             auto public_key_base_64 = jwk.x.value();
-            auto public_key_or_error = decode_base64url(public_key_base_64);
+            auto public_key_or_error = Crypto::SecureBase64UrlDecode(public_key_base_64);
             if (public_key_or_error.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -6665,7 +6668,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ED448::export_key(Bindings::KeyFormat f
 
         // 5. Set the x attribute of jwk according to the definition in Section 2 of [RFC8037].
         if (key->type() == Bindings::KeyType::Public) {
-            jwk.x = TRY_OR_THROW_OOM(vm, encode_base64url(key_data, AK::OmitPadding::Yes));
+            jwk.x = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(key_data, AK::OmitPadding::Yes));
         } else {
             // The "x" parameter of the "epk" field is set as follows:
             // Apply the appropriate ECDH function to the ephemeral private key (as scalar input)
@@ -6673,13 +6676,13 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ED448::export_key(Bindings::KeyFormat f
             // The base64url encoding of the output is the value for the "x" parameter of the "epk" field.
             ::Crypto::Curves::Ed448 curve;
             auto public_key = TRY_OR_THROW_OOM(vm, curve.generate_public_key(key_data));
-            jwk.x = TRY_OR_THROW_OOM(vm, encode_base64url(public_key, AK::OmitPadding::Yes));
+            jwk.x = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(public_key, AK::OmitPadding::Yes));
         }
 
         // 6. If the [[type]] internal slot of key is "private"
         if (key->type() == Bindings::KeyType::Private) {
             // 1. Set the d attribute of jwk according to the definition in Section 2 of [RFC8037].
-            jwk.d = TRY_OR_THROW_OOM(vm, encode_base64url(key_data, AK::OmitPadding::Yes));
+            jwk.d = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(key_data, AK::OmitPadding::Yes));
         }
 
         // 7. Set the key_ops attribute of jwk to the usages attribute of key.
@@ -7231,7 +7234,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> X25519::import_key([[maybe_unused]] Web:
 
             // 2. Let key be a new CryptoKey object that represents the X25519 private key identified by interpreting jwk according to Section 2 of [RFC8037].
             auto private_key_base_64 = jwk.d.value();
-            auto private_key_or_error = decode_base64url(private_key_base_64);
+            auto private_key_or_error = Crypto::SecureBase64UrlDecode(private_key_base_64);
             if (private_key_or_error.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -7264,7 +7267,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> X25519::import_key([[maybe_unused]] Web:
 
             // 2. Let key be a new CryptoKey object that represents the X25519 public key identified by interpreting jwk according to Section 2 of [RFC8037].
             auto public_key_base_64 = jwk.x.value();
-            auto public_key_or_error = decode_base64url(public_key_base_64);
+            auto public_key_or_error = Crypto::SecureBase64UrlDecode(public_key_base_64);
             if (public_key_or_error.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -7389,7 +7392,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> X25519::export_key(Bindings::KeyFormat 
         // 4. Set the x attribute of jwk according to the definition in Section 2 of [RFC8037].
         if (key->type() == Bindings::KeyType::Public) {
             auto public_key = handle.get<ByteBuffer>();
-            jwk.x = TRY_OR_THROW_OOM(vm, encode_base64url(public_key, AK::OmitPadding::Yes));
+            jwk.x = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(public_key, AK::OmitPadding::Yes));
         } else {
             // The "x" parameter of the "epk" field is set as follows:
             // Apply the appropriate ECDH function to the ephemeral private key (as scalar input)
@@ -7397,14 +7400,14 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> X25519::export_key(Bindings::KeyFormat 
             // The base64url encoding of the output is the value for the "x" parameter of the "epk" field.
             ::Crypto::Curves::X25519 curve;
             auto public_key = TRY_OR_THROW_OOM(vm, curve.generate_public_key(handle.get<ByteBuffer>()));
-            jwk.x = TRY_OR_THROW_OOM(vm, encode_base64url(public_key, AK::OmitPadding::Yes));
+            jwk.x = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(public_key, AK::OmitPadding::Yes));
         }
 
         // 5. If the [[type]] internal slot of key is "private"
         if (key->type() == Bindings::KeyType::Private) {
             // 1. Set the d attribute of jwk according to the definition in Section 2 of [RFC8037].
             auto private_key = handle.get<ByteBuffer>();
-            jwk.d = TRY_OR_THROW_OOM(vm, encode_base64url(private_key, AK::OmitPadding::Yes));
+            jwk.d = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(private_key, AK::OmitPadding::Yes));
         }
 
         // 6. Set the key_ops attribute of jwk to the usages attribute of key.
@@ -7639,17 +7642,17 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> X448::export_key(Bindings::KeyFormat fo
 
         // 4. Set the x attribute of jwk according to the definition in Section 2 of [RFC8037].
         if (key->type() == Bindings::KeyType::Public) {
-            jwk.x = TRY_OR_THROW_OOM(m_realm->vm(), encode_base64url(key_data, AK::OmitPadding::Yes));
+            jwk.x = TRY_OR_THROW_OOM(m_realm->vm(), Crypto::SecureBase64UrlEncode(key_data, AK::OmitPadding::Yes));
         } else {
             ::Crypto::Curves::X448 curve;
             auto public_key = TRY_OR_THROW_OOM(m_realm->vm(), curve.generate_public_key(key_data));
-            jwk.x = TRY_OR_THROW_OOM(m_realm->vm(), encode_base64url(public_key, AK::OmitPadding::Yes));
+            jwk.x = TRY_OR_THROW_OOM(m_realm->vm(), Crypto::SecureBase64UrlEncode(public_key, AK::OmitPadding::Yes));
         }
 
         // 5. If the [[type]] internal slot of key is "private"
         if (key->type() == Bindings::KeyType::Private) {
             // 1. Set the d attribute of jwk according to the definition in Section 2 of [RFC8037].
-            jwk.d = TRY_OR_THROW_OOM(m_realm->vm(), encode_base64url(key_data, AK::OmitPadding::Yes));
+            jwk.d = TRY_OR_THROW_OOM(m_realm->vm(), Crypto::SecureBase64UrlEncode(key_data, AK::OmitPadding::Yes));
         }
 
         // 6. Set the key_ops attribute of jwk to the usages attribute of key.
@@ -7847,7 +7850,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> X448::import_key(
 
             // 2. Let key be a new CryptoKey object that represents the X25519 private key identified by interpreting jwk according to Section 2 of [RFC8037].
             auto private_key_base_64 = jwk.d.value();
-            auto private_key_or_error = decode_base64url(private_key_base_64);
+            auto private_key_or_error = Crypto::SecureBase64UrlDecode(private_key_base_64);
             if (private_key_or_error.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -7880,7 +7883,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> X448::import_key(
 
             // 2. Let key be a new CryptoKey object that represents the Ed25519 public key identified by interpreting jwk according to Section 2 of [RFC8037].
             auto public_key_base_64 = jwk.x.value();
-            auto public_key_or_error = decode_base64url(public_key_base_64);
+            auto public_key_or_error = Crypto::SecureBase64UrlDecode(public_key_base_64);
             if (public_key_or_error.is_error()) {
                 return WebIDL::DataError::create(m_realm, "Failed to decode base64"_utf16);
             }
@@ -8267,7 +8270,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> HMAC::export_key(Bindings::KeyFormat fo
 
         // Set the k attribute of jwk to be a string containing data, encoded according to Section
         // 6.4 of JSON Web Algorithms [JWA].
-        jwk.k = MUST(encode_base64url(data, AK::OmitPadding::Yes));
+        jwk.k = MUST(Crypto::SecureBase64UrlEncode(data, AK::OmitPadding::Yes));
 
         // Let algorithm be the [[algorithm]] internal slot of key.
         auto const& algorithm = as<HmacKeyAlgorithm>(*key->algorithm());
@@ -8960,7 +8963,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> MLDSA::export_key(Bindings::KeyFormat f
         // 4. Set the pub attribute of jwk to the base64url encoded public key corresponding to the [[handle]] internal slot of key.
         jwk.pub = TRY_OR_THROW_OOM(
             vm,
-            encode_base64url(handle.visit(
+            Crypto::SecureBase64UrlEncode(handle.visit(
                                  [](::Crypto::PK::MLDSAPublicKey const& public_key) -> ReadonlyBytes { return public_key.public_key(); },
                                  [](::Crypto::PK::MLDSAPrivateKey const& private_key) -> ReadonlyBytes { return private_key.public_key(); },
                                  [](auto) -> ReadonlyBytes { VERIFY_NOT_REACHED(); }),
@@ -8970,7 +8973,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> MLDSA::export_key(Bindings::KeyFormat f
         //       Set the priv attribute of jwk to the base64url encoded seed represented by the [[handle]] internal slot of key.
         if (key->type() == Bindings::KeyType::Private) {
             VERIFY(handle.has<::Crypto::PK::MLDSAPrivateKey>());
-            jwk.priv = TRY_OR_THROW_OOM(vm, encode_base64url(handle.get<::Crypto::PK::MLDSAPrivateKey>().seed(), AK::OmitPadding::Yes));
+            jwk.priv = TRY_OR_THROW_OOM(vm, Crypto::SecureBase64UrlEncode(handle.get<::Crypto::PK::MLDSAPrivateKey>().seed(), AK::OmitPadding::Yes));
         }
 
         // 6. Set the key_ops attribute of jwk to the usages attribute of key.
@@ -9951,7 +9954,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> ChaCha20Poly1305::export_key(Bindings::
         // 3. Set the k attribute of jwk to be a string containing the raw octets of the key represented by [[handle]] internal slot of key,
         //    encoded according to Section 6.4 of JSON Web Algorithms [JWA].
         auto const& key_bytes = key->handle().get<ByteBuffer>();
-        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), encode_base64url(key_bytes, AK::OmitPadding::Yes));
+        jwk.k = TRY_OR_THROW_OOM(m_realm->vm(), Crypto::SecureBase64UrlEncode(key_bytes, AK::OmitPadding::Yes));
 
         // 4. Set the alg attribute of jwk to the string "C20P".
         jwk.alg = "C20P"_string;

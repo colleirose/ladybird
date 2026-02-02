@@ -9,8 +9,19 @@
 
 namespace Crypto {
 
-ErrorOr<String> encode_base64_constant_time(ReadonlyBytes input);
-ErrorOr<ByteBuffer, AK::InvalidBase64> decode_base64_constant_time(StringView input);
-ErrorOr<size_t, AK::InvalidBase64> decode_base64_constant_time_into(StringView input, ByteBuffer& output);
+// Encode
+
+ErrorOr<String> SecureBase64Encode(ReadonlyBytes input, AK:OmitPadding omit_padding);
+ErrorOr<String> SecureBase64UrlEncode(ReadonlyBytes input, AK:OmitPadding omit_padding);
+
+// Decode normal
+// FIX-BEFORE-PR: maybe need implement AK::LastChunkHandling::Loose im not sure if it matters though because while that was explicitly provided a few times in cryptoalgorithms its also the default option 
+ErrorOr<ByteBuffer, AK::InvalidBase64> SecureBase64Decode(StringView input);
+ErrorOr<ByteBuffer, AK::InvalidBase64> SecureBase64UrlDecode(StringView input);
+
+// Decode into
+
+ErrorOr<size_t, AK::InvalidBase64> SecureBase64DecodeInto(StringView input);
+ErrorOr<size_t, AK::InvalidBase64> SecureBase64UrlDecodeInto(StringView input, ByteBuffer& output);
 
 }

@@ -52,6 +52,7 @@ SOFTWARE.
 // ALL decoding tables must be 256 bytes.
 // Each contains 8-bit -> 6-bit value OR 0xFF (invalid)
 static constexpr char STD_ALPHABET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static constexpr char URL_ALPHABET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 namespace Crypto {
 
@@ -65,15 +66,18 @@ static consteval auto decode_table_from(char const* alphabet)
 }
 
 static constexpr auto STD_TABLE = decode_table_from(STD_ALPHABET);
+static constexpr auto URL_TABLE = decode_table_from(URL_ALPHABET);
 
 static ALWAYS_INLINE bool is_invalid(u8 x)
 {
     return x == 0xFF;
 }
 
-ErrorOr<String> encode_base64_constant_time(ReadonlyBytes input)
+// Exported functions at the bottom
+
+// FIX-BEFORE-PR: probably types wrong
+static ErrorOr<String> encode_impl(ReadonlyBytes input, Array<u8, 256> const& table, AK:OmitPadding omit_padding)
 {
-    auto table = STD_ALPHABET;
     StringBuilder out = StringBuilder(((input.size() + 2) / 3) * 4);
 
     size_t i = 0;
@@ -87,26 +91,28 @@ ErrorOr<String> encode_base64_constant_time(ReadonlyBytes input)
     }
 
     size_t rem = input.size() - i;
-    if (rem == 1) {
-        u32 v = (input[i] << 16);
-        TRY(out.try_append(alphabet[(v >> 18) & 0x3F]));
-        TRY(out.try_append(alphabet[(v >> 12) & 0x3F]));
-        TRY(out.try_append('='));
-        TRY(out.try_append('='));
-    } else if (rem == 2) {
-        u32 v = (input[i] << 16) | (input[i + 1] << 8);
-        TRY(out.try_append(alphabet[(v >> 18) & 0x3F]));
-        TRY(out.try_append(alphabet[(v >> 12) & 0x3F]));
-        TRY(out.try_append(alphabet[(v >> 6) & 0x3F]));
-        TRY(out.try_append('='));
+    // FIX-BEFORE-PR: maybe incorrect
+    if (omit_padding == AK::OmitPadding::No) {
+        if (rem == 1) {
+            u32 v = (input[i] << 16);
+            TRY(out.try_append(alphabet[(v >> 18) & 0x3F]));
+            TRY(out.try_append(alphabet[(v >> 12) & 0x3F]));
+            TRY(out.try_append('='));
+            TRY(out.try_append('='));
+        } else if (rem == 2) {
+            u32 v = (input[i] << 16) | (input[i + 1] << 8);
+            TRY(out.try_append(alphabet[(v >> 18) & 0x3F]));
+            TRY(out.try_append(alphabet[(v >> 12) & 0x3F]));
+            TRY(out.try_append(alphabet[(v >> 6) & 0x3F]));
+            TRY(out.try_append('='));
+        }
     }
 
     return out.to_string();
 }
 
-ErrorOr<size_t, AK::InvalidBase64> decode_base64_constant_time_into(StringView input, ByteBuffer& output)
+static ErrorOr<size_t, AK::InvalidBase64> decode_into_impl(StringView input, ByteBuffer& output, Array<u8, 256> const& table)
 {
-    Array<u8, 256> const& table = STD_TABLE;
     size_t n = input.length();
 
     // Reject impossible length (RFC 4648)
@@ -202,20 +208,57 @@ ErrorOr<size_t, AK::InvalidBase64> decode_base64_constant_time_into(StringView i
     return out_index;
 }
 
-ErrorOr<ByteBuffer, AK::InvalidBase64> decode_base64_constant_time(StringView input)
+static ErrorOr<ByteBuffer, AK::InvalidBase64> decode_impl(StringView input, Array<u8, 256> table)
 {
     ByteBuffer output;
 
-    if (output.try_resize(AK::size_required_to_decode_base64(input)).is_error()) {
+    if (output.try_resize(AK::size_required_to_decode_base64(input)).is_error()) [[unlikely]] {
         return AK::InvalidBase64 {
             .error = Error::from_errno(ENOMEM),
             .valid_input_bytes = 0,
         };
     }
 
-    TRY(decode_base64_constant_time_into(input, output, STD_TABLE));
+    TRY(decode_into_impl(input, output, table));
 
     return output;
+}
+
+// Exported functions
+
+// Encode
+ErrorOr<String> SecureBase64Encode(ReadonlyBytes input, AK:OmitPadding omit_padding)
+{
+    TRY(encode_impl(input, STD_TABLE, omit_padding));
+}
+
+ErrorOr<String> SecureBase64UrlEncode(ReadonlyBytes input)
+{
+    TRY(encode_impl(input, URL_TABLE, omit_padding));
+}
+
+// Decode normal
+
+ErrorOr<ByteBuffer, AK::InvalidBase64> SecureBase64Decode(StringView input)
+{
+    TRY(decode_impl(input, STD_TABLE));
+}
+
+ErrorOr<ByteBuffer, AK::InvalidBase64> SecureBase64UrlDecode(StringView input)
+{
+    TRY(decode_impl(input, URL_TABLE));
+}
+
+// Decode into
+
+ErrorOr<size_t, AK::InvalidBase64> SecureBase64DecodeInto(StringView input)
+{
+    TRY(decode_into_impl(input, STD_TABLE));
+}
+
+ErrorOr<size_t, AK::InvalidBase64> SecureBase64UrlDecodeInto(StringView input, ByteBuffer& output)
+{
+    TRY(decode_into_impl(input, URL_TABLE));
 }
 
 }

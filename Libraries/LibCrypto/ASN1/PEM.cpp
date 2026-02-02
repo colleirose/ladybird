@@ -65,7 +65,7 @@ DecodedPEM decode_pem(ReadonlyBytes data)
             if (decoded.type == PEMType::PublicKey || decoded.type == PEMType::RSAPublicKey) {
                 result = decode_base64(val);
             } else {
-                result = decode_base64_constant_time(val);
+                result = SecureBase64Decode(val);
             }
 
             if (result.is_error()) {
@@ -129,7 +129,7 @@ ErrorOr<Vector<DecodedPEM>> decode_pems(ReadonlyBytes data)
             }
 
             auto val = lexer.consume_line().trim_whitespace(TrimMode::Right);
-            if (auto result = decode_base64_constant_time(val); result.is_error())
+            if (auto result = SecureBase64Decode(val); result.is_error())
                 return result.error().error;
 
             auto b64decoded = result.value();
@@ -182,7 +182,7 @@ ErrorOr<ByteBuffer> encode_pem(ReadonlyBytes data, PEMType type)
     if (type == PEMType::PublicKey || type == PEMType::RSAPublicKey) {
         b64encoded = TRY(encode_base64(data));
     } else {
-        b64encoded = TRY(encode_base64_constant_time(data));
+        b64encoded = TRY(SecureBase64Encode(data));
     }
 
     for (size_t i = 0; i < b64encoded.bytes().size(); i += to_read) {

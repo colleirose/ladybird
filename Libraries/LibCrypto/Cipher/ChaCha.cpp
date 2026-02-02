@@ -52,7 +52,6 @@ ErrorOr<ByteBuffer> ChaCha20Poly1305::encrypt(ReadonlyBytes key, ReadonlyBytes n
     result.overwrite(0, ciphertext.data(), ciphertext.size());
     result.overwrite(ciphertext.size(), tag.data(), tag.size());
 
-    ciphertext.clear();
     return result;
 }
 

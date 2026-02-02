@@ -36,8 +36,8 @@ private:
     PasswordCredential(JS::Realm&, PasswordCredentialData const&, URL::Origin);
     virtual void initialize(JS::Realm&) override;
 
-    // TODO: Use Core::SecretString when it comes back
-    String m_password;
+    // FIX-BEFORE-PR: needs more testing
+    Core::SecretString m_password;
 
     // https://www.w3.org/TR/credential-management-1/#dom-credential-origin-slot
     URL::Origin m_origin;
@@ -46,7 +46,7 @@ private:
 struct PasswordCredentialData : CredentialData {
     Optional<String> name;
     Optional<String> icon_url;
-    String password;
+    Core::SecretString password;
 };
 
 using PasswordCredentialInit = Variant<PasswordCredentialData, GC::Root<HTML::HTMLFormElement>>;

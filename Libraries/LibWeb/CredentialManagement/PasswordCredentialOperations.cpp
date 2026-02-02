@@ -48,7 +48,10 @@ WebIDL::ExceptionOr<GC::Ref<PasswordCredential>> create_password_credential(JS::
             //       and newPasswordObserved to true.
             if (token.equals_ignoring_ascii_case("new-password"sv)) {
                 if (auto password = form_data->get(name.value()); password.has<String>()) {
-                    data.password = password.get<String>();
+                    // FIX-BEFORE-PR: test this might be completely wrong im not too smart and also a bit messy and also see if take_ownership works correctly here? (need to be better at cpp)
+                    // ALSO related itd be better if we didnt make a string and stuff because it might be in memory and not get cleared?
+                    auto password_string = password.get<String>();
+                    data.password = Core::SecretString(password_string.bytes(), password_string.byte_count());
                     new_password_observed = true;
                 }
             }
@@ -58,8 +61,10 @@ WebIDL::ExceptionOr<GC::Ref<PasswordCredential>> create_password_credential(JS::
             //       Note: By checking that newPasswordObserved is false, new-password fields take precedence over
             //             current-password fields.
             if (!new_password_observed && token.equals_ignoring_ascii_case("current-password"sv)) {
-                if (auto password = form_data->get(name.value()); password.has<String>())
-                    data.password = password.get<String>();
+                if (auto password = form_data->get(name.value()); password.has<String>()) {
+                    auto password_string = password.get<String>();
+                    data.password = Core::SecretString(password_string.bytes(), password_string.byte_count());
+                }
             }
             //    - "photo"
             //      Set data’s iconURL member’s value to the result of executing formData’s get() method on name.
