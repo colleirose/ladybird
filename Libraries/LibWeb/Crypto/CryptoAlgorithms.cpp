@@ -17,9 +17,9 @@
 #include <LibCrypto/ASN1/DER.h>
 #include <LibCrypto/Authentication/HMAC.h>
 #include <LibCrypto/Certificate/Certificate.h>
-#include <LibCrypto/ConstantTimeBase64.h>
 #include <LibCrypto/Cipher/AES.h>
 #include <LibCrypto/Cipher/ChaCha.h>
+#include <LibCrypto/ConstantTimeBase64.h>
 #include <LibCrypto/Curves/EdwardsCurve.h>
 #include <LibCrypto/Curves/SECPxxxr1.h>
 #include <LibCrypto/Hash/Argon2.h>
@@ -8964,9 +8964,9 @@ WebIDL::ExceptionOr<GC::Ref<JS::Object>> MLDSA::export_key(Bindings::KeyFormat f
         jwk.pub = TRY_OR_THROW_OOM(
             vm,
             Crypto::SecureBase64UrlEncode(handle.visit(
-                                 [](::Crypto::PK::MLDSAPublicKey const& public_key) -> ReadonlyBytes { return public_key.public_key(); },
-                                 [](::Crypto::PK::MLDSAPrivateKey const& private_key) -> ReadonlyBytes { return private_key.public_key(); },
-                                 [](auto) -> ReadonlyBytes { VERIFY_NOT_REACHED(); }),
+                                              [](::Crypto::PK::MLDSAPublicKey const& public_key) -> ReadonlyBytes { return public_key.public_key(); },
+                                              [](::Crypto::PK::MLDSAPrivateKey const& private_key) -> ReadonlyBytes { return private_key.public_key(); },
+                                              [](auto) -> ReadonlyBytes { VERIFY_NOT_REACHED(); }),
                 AK::OmitPadding::Yes));
 
         // 5. -> If the [[type]] internal slot of key is "private":

@@ -68,10 +68,10 @@ ErrorOr<Process::ProcessAndIPCTransport> Process::spawn_and_connect_to_process(P
 #elif defined(AK_OS_WINDOWS)
     Sandbox::WindowsSandboxPolicy policy = Sandbox::GetPolicyForProcessType(options.process_type);
     if (policy.use_appcontainer) {
-        spawn_options.windows_options.type = Core::StartupType::AttributeList;
+        spawn_options.windows_options.type = Core::WindowsStartupOptionsType::AttributeList;
         spawn_options.windows_options.value = TRY(Sandbox::CreateAppContainerAttributesForPolicy(policy));
     } else {
-        spawn_options.windows_options.type = Core::StartupType::Token;
+        spawn_options.windows_options.type = Core::WindowsStartupOptionsType::Token;
         spawn_options.windows_options.value = TRY(Sandbox::GetSandboxedPrimaryToken());
     }
 #endif

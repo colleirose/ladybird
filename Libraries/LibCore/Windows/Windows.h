@@ -6,7 +6,6 @@
 
 // This folder is specifically for important Windows-only exported core code, not all LibCore Windows code.
 
-#include <LibCore/Windows/AccessControl/AccessControl.h>
 #include <LibCore/Windows/OwnedHandle.h>
 #include <LibCore/Windows/WindowsMemory.h>
 

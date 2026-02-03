@@ -7,6 +7,9 @@
 #pragma once
 
 #include "SandboxWindows.h"
+#include <AK/Error.h>
+#include <AK/Types.h>
+#include <LibCore/Windows/AccessControl/SID.h>
 
 namespace WebView::Sandbox {
 

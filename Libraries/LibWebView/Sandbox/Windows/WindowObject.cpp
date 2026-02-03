@@ -10,8 +10,11 @@
 #include "WindowObject.h"
 #include <AK/Assertions.h>
 #include <AK/Error.h>
+#include <AK/Platform.h>
 #include <AK/ScopeGuard.h>
 #include <AK/Try.h>
+#include <LibCore/Windows/AccessControl/ACL.h>
+#include <LibCore/Windows/AccessControl/Token.h>
 
 #include <AK/Windows.h>
 #include <aclapi.h>
@@ -38,6 +41,14 @@ static Optional<HWINSTA> s_alt_winsta;
 
 // This idea is based on Chromium, but the code isn't directly copied from there.
 namespace WebView::Sandbox {
+
+static ALWAYS_INLINE ErrorOr<void> SetCurrentProcessWindowStation(HWINSTA winstation)
+{
+    if (!SetProcessWindowStation(winstation))
+        return Error::from_windows_error();
+
+    return {};
+}
 
 // FIX-BEFORE-PR: this is wrong
 ErrorOr<void> FixTokenDefaultDaclForWindowObjects(HANDLE token, HWINSTA winsta, HDESK desktop)
@@ -119,14 +130,6 @@ ErrorOr<void> FixTokenDefaultDaclForWindowObjects(HANDLE token, HWINSTA winsta, 
     }
 
     // At this point, the token now has ownership of new_acl. Don't free new_acl.
-    return {};
-}
-
-static inline ErrorOr<void> SetCurrentProcessWindowStation(HWINSTA winstation)
-{
-    if (!SetProcessWindowStation(winstation))
-        return Error::from_windows_error();
-
     return {};
 }
 
@@ -218,7 +221,7 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
 
     // If the DACL is NULL, the desktop would currently have no restrictions, but become inaccessible after any changes are applied.
     // Therefore, if it is NULL, we'll first apply a policy that allows access, and then apply the restrictions
-    desktop_absolute_descriptor = TRY(Core::Windows::EnsureNonNullDaclOnAbsoluteDescriptor(desktop_absolute_descriptor));
+    TRY(Core::Windows::MakeAbsoluteDescriptorDaclNotNull(desktop_absolute_descriptor));
 
     // get the security descriptor DACL into desktop_absolute descriptor
     // we have to provide a pointer to receive dacl_present and dacl_defaulted even though we don't check them here

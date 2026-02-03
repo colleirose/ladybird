@@ -7,6 +7,7 @@
 #include <AK/Assertions.h>
 #include <AK/Error.h>
 #include <AK/ScopeGuard.h>
+#include <LibCore/Windows/Windows.h>
 #include <LibWebView/Sandbox/Windows/SandboxWindows.h>
 
 #include <AK/Windows.h>
@@ -70,10 +71,7 @@ ErrorOr<HANDLE> GetSandboxedPrimaryToken()
     //     return Error::from_windows_error();
 
     // set integrity_sid to a low privileged SID
-    auto process_integrity_level
-        = Core::Windows::ProcessIntegrityLevel::LOW;
-    if (!ConvertStringSidToSidW(process_integrity_level, &integrity_sid))
-        return Error::from_windows_error();
+    if (!ConvertStringSidToSidW(Core::Windows::ProcessIntegrityLevel::LOW, &integrity_sid)) return Error::from_windows_error();
 
     // sanity check; the GetLengthSid() documentation encourages you to verify the SID before calling GetLengthSid()
     if (!IsValidSid(integrity_sid))

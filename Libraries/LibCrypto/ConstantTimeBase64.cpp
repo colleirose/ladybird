@@ -49,14 +49,14 @@ SOFTWARE.
 #include <AK/StringView.h>
 #include <AK/Types.h>
 
-// ALL decoding tables must be 256 bytes.
-// Each contains 8-bit -> 6-bit value OR 0xFF (invalid)
-static constexpr char STD_ALPHABET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-static constexpr char URL_ALPHABET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
 namespace Crypto {
 
-static consteval auto decode_table_from(char const* alphabet)
+// ALL decoding tables must be 256 bytes.
+// Each contains 8-bit -> 6-bit value OR 0xFF (invalid)
+static char STD_ALPHABET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static char URL_ALPHABET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+static auto decode_table_from(char const* alphabet)
 {
     Array<u8, 256> table {};
     table.fill(0xFF);
@@ -65,8 +65,8 @@ static consteval auto decode_table_from(char const* alphabet)
     return table;
 }
 
-static constexpr auto STD_TABLE = decode_table_from(STD_ALPHABET);
-static constexpr auto URL_TABLE = decode_table_from(URL_ALPHABET);
+static auto STD_TABLE = decode_table_from(STD_ALPHABET);
+static auto URL_TABLE = decode_table_from(URL_ALPHABET);
 
 static ALWAYS_INLINE bool is_invalid(u8 x)
 {
@@ -76,7 +76,7 @@ static ALWAYS_INLINE bool is_invalid(u8 x)
 // Exported functions at the bottom
 
 // FIX-BEFORE-PR: probably types wrong
-static ErrorOr<String> encode_impl(ReadonlyBytes input, Array<u8, 256> const& table, AK:OmitPadding omit_padding)
+static ErrorOr<String> encode_impl(ReadonlyBytes input, char const* alphabet, AK::OmitPadding omit_padding)
 {
     StringBuilder out = StringBuilder(((input.size() + 2) / 3) * 4);
 
@@ -155,6 +155,7 @@ static ErrorOr<size_t, AK::InvalidBase64> decode_into_impl(StringView input, Byt
                 .valid_input_bytes = i,
             };
         }
+
         if (is_invalid(b)) [[unlikely]] {
             return AK::InvalidBase64 {
                 .error = Error::from_string_literal("Invalid base64 character"),
@@ -227,14 +228,14 @@ static ErrorOr<ByteBuffer, AK::InvalidBase64> decode_impl(StringView input, Arra
 // Exported functions
 
 // Encode
-ErrorOr<String> SecureBase64Encode(ReadonlyBytes input, AK:OmitPadding omit_padding)
+ErrorOr<String> SecureBase64Encode(ReadonlyBytes input, AK : OmitPadding omit_padding)
 {
-    TRY(encode_impl(input, STD_TABLE, omit_padding));
+    TRY(encode_impl(input, &STD_ALPHABET, omit_padding));
 }
 
 ErrorOr<String> SecureBase64UrlEncode(ReadonlyBytes input)
 {
-    TRY(encode_impl(input, URL_TABLE, omit_padding));
+    TRY(encode_impl(input, &URL_ALPHABET, omit_padding));
 }
 
 // Decode normal

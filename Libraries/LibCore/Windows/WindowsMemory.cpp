@@ -8,9 +8,9 @@
 
 namespace Core::Windows {
 
-// This performs the same function as the Windows HeapAlloc function, but also sets last error code on failure.
-// Note that normal LocalAlloc sets the last error value so that isn't needed to be done here.
-void HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes)
+// See WindowsMemory.h for code comments
+
+LPVOID HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes)
 {
     // Note that HeapAlloc would generally generate a STATUS_NO_MEMORY or similar exception on failure, but that isn't a valid value to set for the last error value.
     // Therefore, we've just manually found similar error codes. The error codes used here are from https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/1bc92ddf-b79e-413c-bbaa-99a5281a6c90.
@@ -32,9 +32,6 @@ void HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes)
     return result;
 }
 
-// The Windows free functions can fail and set the last error value,
-// but we generally do not want that error to override the current last error value,
-// as we often will free things at function exit or error handlers, where a previous failure is almost always more important than a failure to free what is typically a very small amount of memory.
 void HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem)
 {
     if (!hHeap) [[unlikely]] {

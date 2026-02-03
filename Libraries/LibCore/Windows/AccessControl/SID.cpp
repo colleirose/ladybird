@@ -15,9 +15,9 @@ ErrorOr<SID_AND_ATTRIBUTES> GetAppContainerCapabilitySidFromName(ByteString capa
 {
     SidArray capability_sids;
     SidArray group_sids;
-    HANDLE heap = GetProcessHeap();
-    if (!heap)
-        return Error::from_windows_error();
+    // HANDLE heap = GetProcessHeap();
+    // if (!heap)
+    //     return Error::from_windows_error();
 
     if (!DeriveCapabilitySidsFromName(
             (LPCWSTR)capability_name.characters(),
@@ -35,15 +35,18 @@ ErrorOr<SID_AND_ATTRIBUTES> GetAppContainerCapabilitySidFromName(ByteString capa
     // however, we can be sure that the actual SID data doesn't exceed SECURITY_MAX_SID_SIZE.
     auto sid_ptr = capability_sids.sids()[0];
     size_t actual_allocation_size = LocalSize(sid_ptr);
-    size_t size = max(actual_allocation_size, SECURITY_MAX_SID_SIZE);
+    size_t sid_size = min(actual_allocation_size, SECURITY_MAX_SID_SIZE);
 
-    PSID new_sid = (PSID)Core::Windows::HeapAlloc(heap, 0, size);
+    // FIX-BEFORE-PR: can we replace all the heapalloc calls with kmalloc safely? we will test this
+    // PSID new_sid = (PSID)Core::Windows::HeapAlloc(heap, 0, sid_size);
+    PSID new_sid = (PSID)kmalloc(sid_size);
     if (!new_sid)
-        return Error::from_windows_error();
+        return Error::from_errno(ENOMEM);
 
-    if (!CopySid(size, new_sid, capability_sids.sids()[0])) {
+    if (!CopySid(sid_size, new_sid, capability_sids.sids()[0])) {
         // we can only free the value if this fails
-        Core::Windows::HeapFree(heap, 0, new_sid);
+        // Core::Windows::HeapFree(heap, 0, new_sid);
+        kfree_sized(new_sid, sid_size);
         return Error::from_windows_error();
     }
 

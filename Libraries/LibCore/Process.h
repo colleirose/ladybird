@@ -40,15 +40,15 @@ struct DupFd {
 }
 
 #ifdef AK_OS_WINDOWS
-enum StartupType {
+enum WindowsStartupOptionsType {
     Unspecified,
     Token,
     AttributeList,
 }
 
 struct ProcessWindowsOptions {
-    StartupType startup_type { StartupType::Unspecified };
-    Variant<HANDLE, LPPROC_THREAD_ATTRIBUTE_LIST> startup_value { NULL };
+    WindowsStartupOptionsType startup_options_type { WindowsStartupOptionsType::Unspecified };
+    Variant<HANDLE, LPPROC_THREAD_ATTRIBUTE_LIST> startup_options_value { NULL };
     Utf16String alt_desktop_name { "" };
 }
 #endif

@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#pragma comment(lib, "advapi32.lib")
-#pragma comment(lib, "Userenv.lib")
-
 #include "AppContainer.h"
 #include <AK/Error.h>
 #include <AK/Hex.h>
@@ -17,13 +14,16 @@
 #include <AK/StringBuilder.h>
 #include <AK/StringView.h>
 #include <AK/Try.h>
+#include <LibCore/Windows/AccessControl/SID.h>
 
 #include <AK/Windows.h>
 #include <AclAPI.h>
-#include <memory>
 #include <sddl.h>
 #include <userenv.h>
 #include <winerror.h>
+
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "Userenv.lib")
 
 using InternalWindowsCapabilities = Vector<SID_AND_ATTRIBUTES>;
 
@@ -133,15 +133,16 @@ ErrorOr<AppContainer> CreateAppContainer(Vector<AppContainerCapability> capabili
 
     if (FAILED(hr)) {
         if (hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)) {
-            // seems like this function can only fail for invalid arguments, so it is likely mostly infallible with our usage
+            // seems like this function can only fail for invalid arguments, so it is likely mostly infallible with our usage, but check just in case
             hr = DeriveAppContainerSidFromAppContainerName((PCWSTR)container_name.characters(), &local_sid);
             if (hr != S_OK)
-                return Error::from_windows_error();
+                return Error::from_windows_error(hr);
         } else {
-            return Error::from_windows_error();
+            return Error::from_windows_error(hr);
         }
     }
 
+    VERIFY(local_sid);
     return {
         .sid = local_sid,
         .capabilities = capabilities,

@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <AK/Memory.h>
 #include <AK/kmalloc.h>
 
 // Generally, we will initialize memory on allocation unless we're specifically asked not to (such as when malloc() is called).

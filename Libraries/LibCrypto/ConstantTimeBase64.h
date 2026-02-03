@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Colleirose <criticskate@pm.me>.
+ * Copyright (c) 2025-2026, Colleirose <criticskate@pm.me>.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -11,11 +11,11 @@ namespace Crypto {
 
 // Encode
 
-ErrorOr<String> SecureBase64Encode(ReadonlyBytes input, AK:OmitPadding omit_padding);
-ErrorOr<String> SecureBase64UrlEncode(ReadonlyBytes input, AK:OmitPadding omit_padding);
+ErrorOr<String> SecureBase64Encode(ReadonlyBytes input, AK::OmitPadding omit_padding);
+ErrorOr<String> SecureBase64UrlEncode(ReadonlyBytes input, AK::OmitPadding omit_padding);
 
 // Decode normal
-// FIX-BEFORE-PR: maybe need implement AK::LastChunkHandling::Loose im not sure if it matters though because while that was explicitly provided a few times in cryptoalgorithms its also the default option 
+// FIX-BEFORE-PR: maybe need implement AK::LastChunkHandling::Loose im not sure if it matters though because while that was explicitly provided a few times in cryptoalgorithms its also the default option and i think we already achieve that
 ErrorOr<ByteBuffer, AK::InvalidBase64> SecureBase64Decode(StringView input);
 ErrorOr<ByteBuffer, AK::InvalidBase64> SecureBase64UrlDecode(StringView input);
 

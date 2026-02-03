@@ -11,6 +11,8 @@
 
 #include <AK/Windows.h>
 
+// Functions for interacting with [security identifiers](https://learn.microsoft.com/en-us/windows/win32/secauthz/security-identifiers), aka SIDs
+
 namespace Core::Windows {
 
 ErrorOr<SID_AND_ATTRIBUTES> GetAppContainerCapabilitySidFromName(ByteString capability_name);

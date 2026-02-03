@@ -9,6 +9,7 @@
 #pragma once
 
 #include <AK/Checked.h>
+#include <AK/Memory.h>
 #include <AK/Platform.h>
 #include <new>
 #include <stdlib.h>

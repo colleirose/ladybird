@@ -291,8 +291,8 @@ ErrorOr<NonnullRefPtr<PlaybackStream>> PlaybackStreamWASAPI::create(OutputState 
     TRY_HR(state->audio_client->GetService(IID_PPV_ARGS(&state->clock)));
 
     state->buffer_event = CreateEvent(NULL, FALSE, FALSE, NULL);
-    if (!state->buffer_event)
-        return Error::from_windows_error(hr);
+    if (!state->buffer_event) // FIX-BEFORE-PR: I removed some clearly wrong code here that did from_windows_error(hr) here, however i should do that in a separate pr for the final version
+        return Error::from_windows_error();
 
     TRY_HR(state->audio_client->SetEventHandle(state->buffer_event.get()));
     TRY_HR(state->clock->GetFrequency(&state->audio_client_clock_frequency));

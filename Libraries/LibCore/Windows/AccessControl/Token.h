@@ -10,12 +10,11 @@
 
 #include <AK/Windows.h>
 
+// Functions for interacing with [access tokens](https://learn.microsoft.com/en-us/windows/win32/secauthz/access-tokens)
+
 namespace Core::Windows {
 
+// Get the default discretionary access list (DACL) for a token. Note that the caller needs to free the return value.
 ErrorOr<PTOKEN_DEFAULT_DACL> GetTokenDefaultDacl(HANDLE token);
-ErrorOr<size_t> AclAcesSize(PACL pacl);
-ErrorOr<void> InsertAcesIntoAcl(PACL new_aces_acl, PACL target_acl);
-ErrorOr<PSECURITY_DESCRIPTOR> AbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTOR relative_sd);
-ErrorOr<PSECURITY_DESCRIPTOR> EnsureNonNullDaclOnAbsoluteDescriptor(PSECURITY_DESCRIPTOR descriptor);
 
 }
