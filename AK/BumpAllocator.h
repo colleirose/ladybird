@@ -82,7 +82,8 @@ public:
 
             if constexpr (use_mmap) {
 #if defined(AK_OS_WINDOWS)
-                VirtualFree((void*)chunk, m_chunk_size, MEM_RELEASE);
+                // Do note that VirtualFree requires providing 0 to the size parameter here when MEM_RELEASE is used.
+                VirtualFree((void*)chunk, 0, MEM_RELEASE);
 #else
                 munmap((void*)chunk, m_chunk_size);
 #endif

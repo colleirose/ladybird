@@ -301,7 +301,7 @@ ErrorOr<NonnullRefPtr<PlaybackStream>> PlaybackStreamWASAPI::create(OutputState 
 
     state->buffer_event = CreateEvent(NULL, FALSE, FALSE, NULL);
     if (!state->buffer_event)
-        return Error::from_windows_error(hr);
+        return Error::from_windows_error();
 
     TRY_HR(state->audio_client->SetEventHandle(state->buffer_event));
     TRY_HR(state->clock->GetFrequency(&state->audio_client_clock_frequency));
