@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "WindowsSandbox.h"
 #include <AK/Assertions.h>
 #include <AK/Error.h>
 #include <AK/ScopeGuard.h>
 #include <LibCore/Windows/Windows.h>
-#include <LibWebView/Sandbox/Windows/SandboxWindows.h>
 
 #include <AK/Windows.h>
+#include <processthreadsapi.h>
 
 static Optional<HANDLE> s_sandbox_token;
 
@@ -108,28 +109,25 @@ ErrorOr<void> CreateAppContainerAttributesForPolicy(WindowsSandboxPolicy const& 
     if (!policy.use_appcontainer)
         return Error::from_string_literal("tried to create AppContainer attributes for a policy that doesn't support AppContainer");
 
-    bool success = false;
-    HANDLE heap = GetProcessHeap();
-    if (!heap)
-        return Error::from_windows_error();
-
     // determine buffer size and allocate buffer
-    size_t size = 0;
-    InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
-    auto* attrs = (LPPROC_THREAD_ATTRIBUTE_LIST)Core::Windows::HeapAlloc(heap, 0, size);
+    size_t attrs_size = 0;
+    VERIFY(InitializeProcThreadAttributeList(nullptr, 1, 0, &attrs_size) == 0);
+    auto* attrs = (LPPROC_THREAD_ATTRIBUTE_LIST)kmalloc(attrs_size);
     if (!attrs)
-        return Error::from_windows_error();
+        return Error::from_errno(ENOMEM);
 
+    bool success = false;
     ScopeGuard guard = [&] {
         // we can only free attrs if the function was unsuccesful, because on success it is going to be used by the startupinfo
         if (!success) {
             DeleteProcThreadAttributeList(attrs);
-            Core::Windows::HeapFree(heap, 0, attrs);
+            kfree_sized(attrs, attrs_size);
         }
     };
 
     // initialize the attribute list and add appcontainer
-    if (!InitializeProcThreadAttributeList(attrs, 1, 0, &size))
+    size_t new_attrs_size = attrs_size; // don't overwrite the attrs_size value, we want to tell kfree_sized the actual size of the allocated memory, not the size of whats used
+    if (!InitializeProcThreadAttributeList(attrs, 1, 0, &new_attrs_size))
         return Error::from_windows_error();
 
     AppContainer appcontainer = TRY(CreateAppContainer(policy.app_container_capabilities));
@@ -179,8 +177,9 @@ WindowsSandboxPolicy GetPolicyForProcessType(ProcessType type)
             // and we likely don't need to grant the location and certificate access to all these processes
             .use_appcontainer = true,
             .app_container_capabilities = {
-                // AppContainerCapability::Networking, // (will it work to restrict this right now?)
-                AppContainerCapability::Filesystem,
+                // FIX-BEFORE-PR: at least some of these can be restricted correctly?
+                // AppContainerCapability::Networking, 
+                // AppContainerCapability::Filesystem,
                 AppContainerCapability::Location,
                 AppContainerCapability::UserCertificates
             },

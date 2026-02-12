@@ -17,20 +17,21 @@ namespace Core::Windows {
 
 ErrorOr<void> MakeAbsoluteDescriptorDaclNotNull(PSECURITY_DESCRIPTOR descriptor)
 {
-    PACL old_dacl = nullptr;
+    // this could also go in ACL.cpp, but whatever
+    PACL current_descriptor_dacl = nullptr;
     BOOL dacl_present = FALSE;
     BOOL dacl_defaulted = FALSE;
-    if (!GetSecurityDescriptorDacl(descriptor, &dacl_present, &old_dacl, &dacl_defaulted))
+    if (!GetSecurityDescriptorDacl(descriptor, &dacl_present, &current_descriptor_dacl, &dacl_defaulted))
         return Error::from_windows_error();
 
     // Nothing to do in this case
-    // (FIX-BEFORE-PR: See if we can make a null dacl happen to test that everything after this works)
-    if (dacl_present && old_dacl != nullptr)
+    // (FIX-BEFORE-PR: See if we can make some test code to create a null dacl happen to test that everything works)
+    if (dacl_present && current_descriptor_dacl != nullptr)
         return descriptor;
 
     PSID everyone_sid = nullptr;
     PSID allapps_sid = nullptr;
-    PACL new_dacl = nullptr;
+    PACL new_descriptor_dacl = nullptr;
     bool success = false;
     ScopeGuard guard = [&] {
         // FIX-BEFORE-PR: Is this safe to do?
@@ -41,10 +42,10 @@ ErrorOr<void> MakeAbsoluteDescriptorDaclNotNull(PSECURITY_DESCRIPTOR descriptor)
         // if (allapps_sid)
         //     FreeSid(allapps_sid);
 
-        // We can only free new_dacl if we fail to modify the security descriptor,
+        // We can only free new_descriptor_dacl if we fail to modify the security descriptor,
         // otherwise it'll be owned by the descriptor and can't be freed
-        if (new_dacl && !success)
-            Core::Windows::LocalFree(new_dacl);
+        if (new_descriptor_dacl && !success)
+            kfree_sized(new_descriptor_dacl);
     };
 
     // Build a barebones permissive DACL
@@ -75,11 +76,11 @@ ErrorOr<void> MakeAbsoluteDescriptorDaclNotNull(PSECURITY_DESCRIPTOR descriptor)
     ea[1].Trustee.ptstrName = (LPWSTR)allapps_sid;
 
     // Set the new DACL
-    DWORD res = SetEntriesInAclW(2, ea, nullptr, &new_dacl);
+    DWORD res = SetEntriesInAclW(2, ea, nullptr, &new_descriptor_dacl);
     if (res != ERROR_SUCCESS)
         return Error::from_windows_error(res);
 
-    if (!SetSecurityDescriptorDacl(&descriptor, TRUE, new_dacl, FALSE))
+    if (!SetSecurityDescriptorDacl(&descriptor, TRUE, new_descriptor_dacl, FALSE))
         return Error::from_windows_error();
 
     success = true;
@@ -100,26 +101,25 @@ ErrorOr<PSECURITY_DESCRIPTOR> AbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTO
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
         return Error::from_windows_error();
 
-    bool success = false;
-    PSECURITY_DESCRIPTOR absolute_sd_out = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, sd_size);
-    PACL dacl = (PACL)LocalAlloc(LPTR, dacl_size);
-    PACL sacl = (PACL)LocalAlloc(LPTR, sacl_size);
-    PSID owner = (PSID)LocalAlloc(LPTR, owner_size);
-    PSID group = (PSID)LocalAlloc(LPTR, group_size);
-
-    // almost certainly an OOM error, too messy to check each allocation
+    PSECURITY_DESCRIPTOR absolute_sd_out = (PSECURITY_DESCRIPTOR)kmalloc(sd_size); // FIX-BEFORE-PR: test that it works after LocalAlloc -> kmalloc changes
+    PACL dacl = (PACL)kmalloc(dacl_size);
+    PACL sacl = (PACL)kmalloc(sacl_size);
+    PSID owner = (PSID)kmalloc(owner_size);
+    PSID group = (PSID)kmalloc(group_size);
     if (!absolute_sd_out || !dacl || !sacl || !owner || !group)
-        return Error::from_windows_error();
+        return Error::from_errno(ENOMEM);
 
+    bool success = false;
     ScopeGuard guard = [&] {
-        // we only want to free these if the function failed, otherwise they are going to be owned by the descriptor
+        // we can only free these if the function failed, otherwise they are going to be owned by the descriptor
         if (success)
             return;
 
-        Core::Windows::LocalFree(dacl);
-        Core::Windows::LocalFree(sacl);
-        Core::Windows::LocalFree(owner);
-        Core::Windows::LocalFree(group);
+        kfree_sized(absolute_sd_out, sd_size);
+        kfree_sized(dacl, dacl_size);
+        kfree_sized(sacl, sacl_size);
+        kfree_sized(owner, owner_size);
+        kfree_sized(group, group_size);
     };
 
     // Create and return the descriptor

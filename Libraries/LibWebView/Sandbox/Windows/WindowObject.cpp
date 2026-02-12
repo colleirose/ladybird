@@ -56,7 +56,7 @@ ErrorOr<void> FixTokenDefaultDaclForWindowObjects(HANDLE token, HWINSTA winsta, 
     DWORD token_length = 0;
     PSECURITY_DESCRIPTOR winsta_sd = nullptr;
     PSECURITY_DESCRIPTOR desktop_sd = nullptr;
-    PTOKEN_DEFAULT_DACL old_token_default = TRY(Core::Windows::GetTokenDefaultDacl(token));
+    PTOKEN_DEFAULT_DACL old_token_default = TRY((PTOKEN_DEFAULT_DACL)Core::Windows::GetTokenInfo(token, TokenDefaultDacl));
 
     ScopeGuard guard = [&] {
         if (winsta_sd)
@@ -129,7 +129,6 @@ ErrorOr<void> FixTokenDefaultDaclForWindowObjects(HANDLE token, HWINSTA winsta, 
         return Error::from_windows_error();
     }
 
-    // At this point, the token now has ownership of new_acl. Don't free new_acl.
     return {};
 }
 
@@ -185,8 +184,7 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
     auto id = GetCurrentProcessId();
     TRY(name_builder.try_append(winsta ? "desktop_alt_" : "desktop_alt_winstation_"));
     TRY(name_builder.try_append(String::number(id)));
-
-    alt_desktop_name = name_builder.to_utf16_string();
+    auto alt_desktop_name = name_builder.to_utf16_string();
 
     // We will use the current desktop privileges as the base for the new desktop privileges
     HDESK current_desktop = GetThreadDesktop(GetCurrentThreadId());
@@ -248,7 +246,7 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
     //     FreeSid(&nt_authority_sid);
 
     if (!init_sid_res) {
-        LogGenericSandboxFailureFromError("initialize SECURITY_RESTRICTED_CODE_RID (continuing anyway)", Error::from_windows_error());
+        LogGenericSandboxError("initialize SECURITY_RESTRICTED_CODE_RID (continuing anyway)", Error::from_windows_error());
     } else {
         EXPLICIT_ACCESS_W deny_ea = {};
         deny_ea.grfAccessMode = DENY_ACCESS;
@@ -258,9 +256,9 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
 
         if (SetEntriesInAclW(1, &deny_ea, old_dacl, &new_dacl) == ERROR_SUCCESS) {
             if (!SetSecurityDescriptorDacl(desktop_absolute_descriptor, TRUE, new_dacl, FALSE))
-                LogGenericSandboxFailureFromError("set desktop security descriptor (continuing anyway)", Error::from_windows_error());
+                LogGenericSandboxError("set desktop security descriptor (continuing anyway)", Error::from_windows_error());
         } else {
-            LogGenericSandboxFailureFromError("modify new_dacl to add deny_ea (continuing anyway)", Error::from_windows_error());
+            LogGenericSandboxError("modify new_dacl to add deny_ea (continuing anyway)", Error::from_windows_error());
         }
     }
 
@@ -293,7 +291,7 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
             if (!desktop) {
                 // properly log a scenario where both CreateDesktop and SetProcessWindowStation fail
                 auto desktop_err = Error::from_windows_error(desktop_lasterror_value);
-                LogGenericSandboxFailureFromError("create a valid desktop object", desktop_err);
+                LogGenericSandboxError("create a valid desktop object", desktop_err);
             }
 
             return res.error();
@@ -304,11 +302,12 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
         return Error::from_windows_error(desktop_lasterror_value);
 
     success = true;
-    s_alt_desktop = {
+    // FIX-BEFORE-PR: should this have the * or no
+    *s_alt_desktop = {
         .alt_desktop = desktop,
         .name = alt_desktop_name,
     };
-    return s_alt_desktop;
+    return *s_alt_desktop;
 }
 
 }

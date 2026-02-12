@@ -8,7 +8,13 @@
 
 namespace Core::Windows {
 
-// See WindowsMemory.h for code comments
+// See WindowsMemory.h for comments on what functions do
+
+// FIX-BEFORE-PR: Replacing heapalloc with kmalloc if it works (remember to look for the commented out heapalloc calls and remove or add back depending on which is needed).
+// Also if we can replace heapalloc with kmalloc we can obviously replace heapfree with free
+// Also if we can remove heapalloc and heapfree put the "see windowsmemory.h" above localfree and say like "see windowsmemory.h for what this is for" etc
+// And move the "clear memory before freeing ..." comemnt inside localfree if this all can be done
+// We may be able to also just get rid of the localalloc usages entirely
 
 LPVOID HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes)
 {
@@ -47,7 +53,7 @@ void HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem)
     if (size == (SIZE_T)-1) [[unlikely]] {
         warnln("HeapSize() failed in Core::Windows::HeapFree, the memory is likely invalid. HeapFree will probably fail next.");
     } else {
-        // Clear unneeded memory before freeing, as we don't know from a generic function like this if it contains sensitive content.
+        // Clear memory before freeing, as we don't know from a generic function like this if it contains sensitive content.
         secure_memzero(lpMem, size);
     }
 

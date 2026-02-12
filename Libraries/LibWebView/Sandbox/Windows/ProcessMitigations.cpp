@@ -6,10 +6,8 @@
 
 #pragma once
 
-#include "SandboxWindows.h"
+#include "ProcessMitigations.h"
 #include <AK/Error.h>
-#include <AK/Format.h>
-#include <AK/Try.h>
 
 #include <AK/Windows.h>
 #include <sddl.h>
@@ -17,20 +15,20 @@
 // This code takes some inspiration from the Chromium source code, but no code is copied from there.
 namespace WebView::Sandbox {
 
-ErrorOr<void> EnableWindowsProcessSecurityMitigations()
+void EnableWindowsProcessSecurityMitigations()
 {
-    // Tries to limit which directories are searched
+    // Tries to limit which directories are searched for DLLs
     if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS))
-        LogGenericSandboxFailureFromError("set default DLL directories", Error::from_windows_error());
+        LogGenericSandboxError("set default DLL directories", Error::from_windows_error());
 
     // https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapsetinformation
     // Makes the Windows heap memory allocator terminate on corruption
     HANDLE process_heap = GetProcessHeap();
     if (!process_heap)
-        LogGenericSandboxFailureFromError("get heap information", Error::from_windows_error());
+        LogGenericSandboxError("get heap information", Error::from_windows_error());
 
     if (!HeapSetInformation(process_heap, HeapEnableTerminationOnCorruption, NULL, 0))
-        LogGenericSandboxFailureFromError("set heap information", Error::from_windows_error());
+        LogGenericSandboxError("set heap information", Error::from_windows_error());
 
     // This has its own helper function below due to being fairly long
     ApplyWindowsMitigationPolicies();
@@ -38,7 +36,7 @@ ErrorOr<void> EnableWindowsProcessSecurityMitigations()
     return {};
 }
 
-inline void SetMitigation(PROCESS_MITIGATION_POLICY policy,
+static inline void SetMitigation(PROCESS_MITIGATION_POLICY policy,
     PVOID lpBuffer,
     SIZE_T dwLength)
 {
@@ -48,13 +46,13 @@ inline void SetMitigation(PROCESS_MITIGATION_POLICY policy,
     // for more information on how this works
     // FIXME: Detect the user's specific Windows release and only apply mitigations that support their current Windows version
     if (!SetProcessMitigationPolicy(policy, lpBuffer, dwLength))
-        LogGenericSandboxFailureFromError("set mitigation policy", Error::from_windows_error());
+        LogGenericSandboxError("set mitigation policy", Error::from_windows_error());
 }
 
 // For more information on available mitigation policies, see:
 // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-SetMitigation
 // https://blogs.windows.com/msedgedev/2017/02/23/mitigating-arbitrary-native-code-execution/
-inline void ApplyWindowsMitigationPolicies()
+static inline void ApplyWindowsMitigationPolicies()
 {
     // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-process_mitigation_dep_policy
     // Usually this is enabled by default but some of the options like Permanent and DisableAtlThunkEmulation might not be

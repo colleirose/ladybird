@@ -5,10 +5,6 @@
  */
 
 #include "ACL.h"
-
-#include <AK/Windows.h>
-#include <aclapi.h>
-
 #pragma comment(lib, "advapi32.lib")
 
 namespace Core::Windows {

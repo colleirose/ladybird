@@ -16,7 +16,6 @@ struct DesktopObject {
     Utf16String name;
 };
 
-ErrorOr<HANDLE> CreateSandboxedPrimaryToken();
 ErrorOr<HWINSTA> GetSandboxedWindowStation();
 ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta);
 

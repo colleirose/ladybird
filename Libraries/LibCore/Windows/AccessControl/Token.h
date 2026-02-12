@@ -14,7 +14,7 @@
 
 namespace Core::Windows {
 
-// Get the default discretionary access list (DACL) for a token. Note that the caller needs to free the return value.
-ErrorOr<PTOKEN_DEFAULT_DACL> GetTokenDefaultDacl(HANDLE token);
+// Wrapper around GetTokenInformation() that automatically determines the required size, does the memory allocation, and then calls the function
+ErrorOr<void*> GetTokenInfo(HANDLE token, TOKEN_INFORMATION_CLASS token_info_class);
 
 }

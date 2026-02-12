@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Memory.h>
 #include <AK/StdLibExtras.h>
 #include <Libraries/LibCore/Windows/AccessControl/SID.h>
 
@@ -37,7 +38,6 @@ ErrorOr<SID_AND_ATTRIBUTES> GetAppContainerCapabilitySidFromName(ByteString capa
     size_t actual_allocation_size = LocalSize(sid_ptr);
     size_t sid_size = min(actual_allocation_size, SECURITY_MAX_SID_SIZE);
 
-    // FIX-BEFORE-PR: can we replace all the heapalloc calls with kmalloc safely? we will test this
     // PSID new_sid = (PSID)Core::Windows::HeapAlloc(heap, 0, sid_size);
     PSID new_sid = (PSID)kmalloc(sid_size);
     if (!new_sid)
@@ -45,8 +45,7 @@ ErrorOr<SID_AND_ATTRIBUTES> GetAppContainerCapabilitySidFromName(ByteString capa
 
     if (!CopySid(sid_size, new_sid, capability_sids.sids()[0])) {
         // we can only free the value if this fails
-        // Core::Windows::HeapFree(heap, 0, new_sid);
-        kfree_sized(new_sid, sid_size);
+        kfree_sized(new_sid, sid_size); // Core::Windows::HeapFree(heap, 0, new_sid);
         return Error::from_windows_error();
     }
 

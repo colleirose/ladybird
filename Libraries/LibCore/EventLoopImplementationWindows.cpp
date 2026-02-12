@@ -139,7 +139,7 @@ size_t EventLoopImplementationWindows::pump(PumpMode pump_mode)
         timeout = INFINITE;
 
     BOOL success = GetQueuedCompletionStatusEx(thread_data->iocp.handle, entries, entry_count, &entries_removed, timeout, FALSE);
-    dbgln_if(debug_event_loop, "Event loop dequed {} events", entries_removed);
+    dbgln_if(debug_event_loop, "Event loop dequeued {} events", entries_removed);
 
     if (success) {
         for (ULONG i = 0; i < entries_removed; i++) {

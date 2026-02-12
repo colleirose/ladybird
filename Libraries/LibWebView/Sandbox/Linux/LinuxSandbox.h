@@ -6,18 +6,14 @@
 
 #pragma once
 
-#include "LinuxSandbox.h"
 #include "SandboxPolicies.h"
 #include "bubblewrap.h"
-#include <AK/HashMap.h>
-#include <LibWebView/Process.h>
-#include <seccomp.h>
+#include "seccomp.h"
+
+#include <LibWebView/ProcessType.h>
 
 namespace WebView::Sandbox {
 
 LinuxSandboxPolicy GetPolicyForProcessType(ProcessType type);
-ErrorOr<ReadonlySpan<String>> GetAllowedSyscallsForPolicy(LinuxSandboxPolicy policy);
-ErrorOr<scmp_filter_ctx> GetSeccompCtxForProcessType(ProcessType type);
-ErrorOr<void> ApplySeccompToCurrentProcess(ProcessType type);
 
 }

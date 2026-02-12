@@ -9,6 +9,7 @@
 #include "AppContainer.h"
 #include "Token.h"
 #include "WindowObject.h"
+#include "ProcessMitigations.h"
 #include <AK/Span.h>
 #include <AK/String.h>
 #include <AK/Types.h>
@@ -27,7 +28,6 @@ struct WindowsSandboxPolicy {
 
 ErrorOr<HANDLE> GetSandboxedPrimaryToken();
 WindowsSandboxPolicy GetPolicyForProcessType(ProcessType type);
-ErrorOr<void> EnableWindowsProcessSecurityMitigations();
 ErrorOr<void> SetStartupInfoForDesktopAndPolicy(
     STARTUPINFOEX& si,
     String alt_desktop_name,

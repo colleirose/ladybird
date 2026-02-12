@@ -89,11 +89,6 @@ public:
         return &handle_;
     }
 
-    HANDLE get_raw() noexcept
-    {
-        return handle_;
-    }
-
 private:
     HANDLE handle_ = nullptr;
 };

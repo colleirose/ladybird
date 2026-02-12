@@ -15,9 +15,7 @@ namespace Core::Windows {
 // Idea from https://github.com/chromium/chromium/blob/88c4bbd2cc6fadc08e929b54b9c1543b495d1641/base/memory/platform_shared_memory_region_win.cc#L62-L98
 ErrorOr<HANDLE> CreateLowPrivilegedAnonFileMap(size_t max_size_high, size_t max_size_low, [[maybe_unused]] ByteString name)
 {
-    HANDLE new_handle;
-    HANDLE process = GetCurrentProcess();
-    OwnedHandle map_handle = CreateFileMappingW(
+    HANDLE source_handle = CreateFileMappingW(
         INVALID_HANDLE_VALUE,
         nullptr,
         PAGE_READWRITE,
@@ -25,17 +23,19 @@ ErrorOr<HANDLE> CreateLowPrivilegedAnonFileMap(size_t max_size_high, size_t max_
         (DWORD)max_size_low,
         name ? (LPCWSTR)name.characters() : NULL);
 
-    if (!map_handle)
+    if (!source_handle)
         return Error::from_windows_error();
 
+    HANDLE new_handle;
+    HANDLE process = GetCurrentProcess();
     if (!DuplicateHandle(
             process,
-            map_handle.put(),
+            source_handle,
             process,
-            new_handle,
+            &new_handle,
             FILE_MAP_READ | FILE_MAP_WRITE | SECTION_QUERY,
             FALSE,
-            0))
+            DUPLICATE_CLOSE_SOURCE))
         return Error::from_windows_error();
 
     return new_handle;

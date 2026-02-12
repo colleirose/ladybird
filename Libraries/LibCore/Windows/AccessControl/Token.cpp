@@ -5,6 +5,7 @@
  */
 
 #include <AK/Error.h>
+#include <AK/Memory.h>
 #include <AK/ScopeGuard.h>
 #include <LibCore/Windows/AccessControl/Token.h>
 
@@ -15,20 +16,26 @@
 
 namespace Core::Windows {
 
-// See Token.h for comments about what functions are for
-
-ErrorOr<PTOKEN_DEFAULT_DACL> GetTokenDefaultDacl(HANDLE token)
+ErrorOr<void*> GetTokenInfo(HANDLE token, TOKEN_INFORMATION_CLASS token_info_class)
 {
+    // calculate required size
     DWORD token_length = 0;
-    PTOKEN_DEFAULT_DACL val = (PTOKEN_DEFAULT_DACL)LocalAlloc(LPTR, token_length);
-    if (!val)
+    DWORD initial_res = GetTokenInformation(token, token_info_class, nullptr, 0, &token_length);
+    VERIFY(initial_res != 0);
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
         return Error::from_windows_error();
 
-    GetTokenInformation(token, TokenDefaultDacl, nullptr, 0, &token_length); // calculate required size
-    if (!GetTokenInformation(token, TokenDefaultDacl, val, token_length, &token_length))
-        return Error::from_windows_error();
+    // allocate memory and get token info
+    void* ptr = kmalloc(token_length);
+    if (!ptr)
+        return Error::from_errno(ENOMEM);
 
-    return val;
+    if (!GetTokenInformation(token, token_info_class, ptr, token_length, &token_length)) {
+        kfree_sized(ptr, token_length);
+        return Error::from_windows_error();
+    }
+
+    return ptr;
 }
 
 }

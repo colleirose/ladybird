@@ -61,7 +61,7 @@ bool IsBubblewrapSupported()
     // unless the errors in question would clearly preclude this function ever succeeding
     Vector<ByteString> generated_bwrap_args;
     if (auto args_res = CreateBwrapArguments(process_options); args_res.is_error()) {
-        LogGenericSandboxFailureFromError("generate bubblewrap arguments", args_res.error());
+        LogGenericSandboxError("generate bubblewrap arguments", args_res.error());
         return false;
     } else {
         generated_bwrap_args = args_res.value();
@@ -69,8 +69,9 @@ bool IsBubblewrapSupported()
 
     posix_spawn_file_actions_t spawn_actions;
     if (int ret = posix_spawn_file_actions_init(&spawn_actions); ret != 0) {
+        // usually out of memory
         auto actions_err = Error::from_syscall("posix_spawn_file_actions_init"sv, ret);
-        LogGenericSandboxFailureFromError("initialize spawn actions for the bubblewrap test", actions_err);
+        LogGenericSandboxError("initialize spawn actions for the bubblewrap test", actions_err);
         return false;
     }
 
@@ -80,34 +81,34 @@ bool IsBubblewrapSupported()
     if (spawn_res.is_error()) {
         auto spawn_error = spawn_res.error();
         if (spawn_error.code == ENOMEM) {
-            LogGenericSandboxFailureFromError("spawn process to test bubblewrap because the system is out of memory", spawn_error);
+            LogGenericSandboxError("spawn process to test bubblewrap because the system is out of memory", spawn_error);
             return false;
         }
 
         if (spawn_error.code == EAGAIN) {
-            LogGenericSandboxFailureFromError("spawn process to test bubblewrap because too many processes are running", spawn_error);
+            LogGenericSandboxError("spawn process to test bubblewrap because too many processes are running", spawn_error);
             return false;
         }
 
-        LogGenericSandboxFailureFromError("spawn process to test bubblewrap due to a miscellaneous error", spawn_error);
+        LogGenericSandboxError("spawn process to test bubblewrap, bubblewrap is likely unavailable or broken", spawn_error);
         bwrap_support_cache = BwrapCacheValue::Unsupported;
         return false;
     }
 
     auto process = Core::System::Process(spawn_res.value());
     if (auto wait_for_term_res = process.wait_for_termination(); wait_for_term_res.is_error()) {
-        LogGenericSandboxFailureFromError("terminate bubblewrap test process", wait_for_term_res.error());
+        LogGenericSandboxError("terminate bubblewrap test process", wait_for_term_res.error());
         bwrap_support_cache = BwrapCacheValue::Unsupported;
         return false;
     } else {
         int val = wait_for_term_res.release_value();
         if (val != 0) {
             if (val == ENOMEM) {
-                LogGenericSandboxFailureFromError("run bubblewrap test because the system is out of memory", Error::from_errno(val));
+                LogGenericSandboxError("run bubblewrap test because the system is out of memory", Error::from_errno(val));
                 return false;
             }
 
-            LogGenericSandboxFailureFromError("run bubblewrap test, bubblewrap is likely unavailable or broken", Error::from_errno(val));
+            LogGenericSandboxError("run bubblewrap test, bubblewrap is likely unavailable or broken", Error::from_errno(val));
             bwrap_support_cache = BwrapCacheValue::Unsupported;
             return false;
         }
@@ -130,7 +131,7 @@ ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[ma
         "--chdir",
         "/",
         // readonly /usr binding
-        // FIXME could this be removed?
+        // FIX-BEFORE-PR: could this be removed?
         "--ro-bind",
         "/usr",
         "/usr",
@@ -170,7 +171,6 @@ ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[ma
     int seccomp_memfd = 0;
     if (seccomp_file_descriptors.contains(type)) {
         seccomp_memfd = seccomp_file_descriptors.find(type);
-        VERIFY(seccomp_memfd > 0);
     } else {
         bool memfd_success = false;
         ScopeGuard guard = [&] {
@@ -183,6 +183,7 @@ ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[ma
         TRY(seccomp_file_descriptors.try_set(type, seccomp_memfd));
         memfd_success = true;
     }
+    VERIFY(seccomp_memfd > 0);
 
     TRY(command.try_append("--seccomp"));
     TRY(command.try_append(ByteString::number(seccomp_memfd)));
