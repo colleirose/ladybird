@@ -41,4 +41,12 @@ ErrorOr<HANDLE> CreateLowPrivilegedAnonFileMap(size_t max_size_high, size_t max_
     return new_handle;
 }
 
+ErrorOr<void> SetCurrentProcessWindowStation(HWINSTA winstation)
+{
+    if (!SetProcessWindowStation(winstation))
+        return Error::from_windows_error();
+
+    return {};
+}
+
 }

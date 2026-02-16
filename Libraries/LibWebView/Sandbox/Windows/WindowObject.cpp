@@ -42,14 +42,6 @@ static Optional<HWINSTA> s_alt_winsta;
 // This idea is based on Chromium, but the code isn't directly copied from there.
 namespace WebView::Sandbox {
 
-static ALWAYS_INLINE ErrorOr<void> SetCurrentProcessWindowStation(HWINSTA winstation)
-{
-    if (!SetProcessWindowStation(winstation))
-        return Error::from_windows_error();
-
-    return {};
-}
-
 // FIX-BEFORE-PR: this is wrong
 ErrorOr<void> FixTokenDefaultDaclForWindowObjects(HANDLE token, HWINSTA winsta, HDESK desktop)
 {
@@ -180,11 +172,11 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop(HWINSTA winsta = nullptr)
         return *s_alt_desktop;
 
     // Generate the name, we use it at the end
-    auto name_builder = StringBuilder(Mode::UTF16, 64);
-    auto id = GetCurrentProcessId();
-    name_builder.append(winsta ? "desktop_alt_" : "desktop_alt_winstation_");
-    name_builder.append(Utf16String::number(id)); // FIX-BEFORE-PR: do we need to do .utf16_view() ?
-    auto alt_desktop_name = name_builder.to_utf16_string();
+    StringBuilder name_builder(StringBuilder::Mode::UTF16);
+    name_builder.append(winsta ? "desktop_alt_"sv : "desktop_alt_winstation_"sv);
+    auto id = Utf16String::number(GetCurrentProcessId());
+    name_builder.append(id.utf16_view());
+    Utf16String alt_desktop_name = name_builder.to_utf16_string();
 
     // We will use the current desktop privileges as the base for the new desktop privileges
     HDESK current_desktop = GetThreadDesktop(GetCurrentThreadId());
@@ -283,10 +275,11 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop(HWINSTA winsta = nullptr)
     if (winsta && winsta != old_winsta) {
         // Restore previous window station now that we're done working with it
         if (auto res = SetCurrentProcessWindowStation(old_winsta); res.is_error()) {
-            if (!desktop) {
-                // properly log a scenario where both CreateDesktop and SetProcessWindowStation fail
+            if (desktop == NULL) {
+                // properly handle a scenario where both CreateDesktop and SetProcessWindowStation fail
                 auto desktop_err = Error::from_windows_error(desktop_lasterror_value);
                 LogGenericSandboxError("create a valid desktop object", desktop_err);
+                LogGenericSandboxError("set the process window station", res.error());
             }
 
             return res.error();

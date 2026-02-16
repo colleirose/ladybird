@@ -27,9 +27,9 @@ ErrorOr<HANDLE> GetSandboxedPrimaryToken()
     HANDLE new_token = NULL;
     DWORD group_count = 0;
 
-    HANDLE process_heap = GetProcessHeap();
-    if (!process_heap)
-        return Error::from_windows_error();
+    // HANDLE process_heap = GetProcessHeap();
+    // if (!process_heap)
+    //     return Error::from_windows_error();
 
     // open token
     constexpr DWORD token_access
@@ -46,7 +46,7 @@ ErrorOr<HANDLE> GetSandboxedPrimaryToken()
     PTOKEN_GROUPS* groups = nullptr;
     ScopeGuard guard = [&] {
         if (groups)
-            Core::Windows::HeapFree(process_heap, 0, groups);
+            free(groups);
 
         if (integrity_sid)
             Core::Windows::LocalFree(integrity_sid);

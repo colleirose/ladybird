@@ -253,6 +253,9 @@ ErrorOr<void*> mmap(void* address, size_t size, int protection, int flags, int f
     // NOTE: Regular POSIX mmap() doesn't support custom alignment requests.
     VERIFY(!alignment);
 
+    if (flags & MAP_HUGETLB)
+        return Error::from_string_literal("hugetlb isn't supported"); // see seccomp filters in the sandbox for more information
+
     protection = AddMteToProtFlagsIfSupported(protection, size);
     void* ptr = ::mmap(address, size, protection, flags, fd, offset);
     if (ptr == MAP_FAILED)

@@ -15,6 +15,7 @@
 namespace Core::Windows {
 
 ErrorOr<HANDLE> CreateLowPrivilegedAnonFileMap(size_t max_size_high, size_t max_size_low, [[maybe_unused]] ByteString name);
+ErrorOr<void> SetCurrentProcessWindowStation(HWINSTA winstation);
 
 // These must be valid SID strings
 // They can be used with functions like ConvertStringSidToSid

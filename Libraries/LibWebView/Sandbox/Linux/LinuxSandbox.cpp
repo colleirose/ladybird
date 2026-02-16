@@ -12,7 +12,7 @@ namespace WebView::Sandbox {
 
 LinuxSandboxPolicy GetPolicyForProcessType(ProcessType type)
 {
-    // FIX-BEFORE-PR: unsure which of these restrictions work
+    // FIX-BEFORE-PR: unsure which of these restrictions work and what could maybe be removed
     switch (type) {
     case ProcessType::Unspecified:
         return {
@@ -22,7 +22,9 @@ LinuxSandboxPolicy GetPolicyForProcessType(ProcessType type)
     case ProcessType::ImageDecoder:
         return {
             .use_bubblewrap = true,
-            .allowed_capabilities = {},
+            .allowed_capabilities = {
+                LinuxCapability::FilesystemEmpty, // basic filesystem access is required for AnonymousBuffer to work correctly
+            },
         };
     case ProcessType::RequestServer: {
         return
@@ -30,7 +32,7 @@ LinuxSandboxPolicy GetPolicyForProcessType(ProcessType type)
             .use_bubblewrap = true,
             .allowed_capabilities = {
                 LinuxCapability::Networking,
-                LinuxCapability::FilesystemCacheFiles, // disk caching
+                LinuxCapability::FilesystemCacheFiles,
             }
         }
     }

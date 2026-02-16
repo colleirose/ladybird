@@ -123,7 +123,6 @@ bool IsBubblewrapSupported()
 
 ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[maybe_unused]] int seccomp_memfd)
 {
-    VERIFY(GetPolicyForProcessType(type).use_bubblewrap);
     // this code is partially based on:
     // https://gitlab.gnome.org/GNOME/glycin/-/blob/764672a14c5ac63a94619882ef6e75e0cd916891/glycin/src/sandbox.rs#L285-488
     // https://github.com/containers/bubblewrap/blob/b8e6e1159e63045679ae57b8b379b39eae7798a6/demos/bubblewrap-shell.sh
@@ -171,6 +170,9 @@ ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[ma
         "/nix/store",
     };
 
+    auto policy = GetPolicyForProcessType(type);
+    VERIFY(policy.use_bubblewrap);
+
     // Setup seccomp filters
     int seccomp_memfd = 0;
     if (seccomp_file_descriptors.contains(type)) {
@@ -194,8 +196,6 @@ ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[ma
     command.extend({ "--seccomp", ByteString::number(seccomp_memfd) });
 
     // Append initial options based on process type
-    auto policy = GetPolicyForProcessType(type);
-
     if (policy.allowed_capabilities.contains(LinuxCapability::Networking)) {
         command.extend({
             // this only looks like 2 of the same argument because we are binding the host resolv.conf to the sandbox resolv.conf

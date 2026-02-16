@@ -14,6 +14,7 @@ namespace WebView::Sandbox {
 
 enum class LinuxCapability : u8 {
     Networking,
+    FilesystemEmpty,
     FilesystemUserFiles,
     FilesystemCacheFiles,
     ProcessManagement,
@@ -153,9 +154,18 @@ class SyscallNameLists {
         "posix_spawnattr_getflags",
     };
 
-    // Based on https://github.com/chromium/chromium/blob/16d6196943529ac4379678dbd75add87110273e6/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc#L104-L195
-    // Removed everything we don't use
-    static constexpr auto filesystem = {
+    // Filesystem syscall list is roughly based on https://github.com/chromium/chromium/blob/16d6196943529ac4379678dbd75add87110273e6/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc#L104-L195
+    static constexpr auto filesystem_basic = {
+        // Required for anonymousbuffer
+        "memfd_create",
+        "open",
+        "read",
+        "write",
+        "lseek",
+        "fnctl",
+    };
+
+    static constexpr auto filesystem_additional = {
     // FIX-BEFORE-PR: some of these are clearly unused
 #if !ARCH(AARCH64)
         "access",
@@ -171,14 +181,12 @@ class SyscallNameLists {
         "lstat",
         "mkdir",
         "mknod",
-        "open",
         "readlink",
         "rename",
         "rmdir",
         "stat",
         "symlink",
         "unlink",
-        "ustat",
         "utimes",
 #endif // !ARCH(AARCH64)
         "execve",
@@ -198,7 +206,6 @@ class SyscallNameLists {
 #if defined(AK_ARCH_32_BIT)
         "lstat64",
 #endif
-        "memfd_create",
         "mkdirat",
         "mknodat",
 #if ARCH(I386)

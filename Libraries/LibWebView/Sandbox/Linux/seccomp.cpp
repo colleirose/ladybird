@@ -101,13 +101,19 @@ static Vector<ByteString> GetAllowedSyscallsForPolicy(LinuxSandboxPolicy policy)
     if (policy.allowed_capabilities.contains(LinuxCapability::Networking))
         allowed.extend(SyscallNameLists::networking);
 
-    if (policy.allowed_capabilities.contains(LinuxCapability::FilesystemUserFiles) || policy.allowed_capabilities.contains(LinuxCapability::FilesystemCacheFiles)) {
-        // bubblewrap will provide particular restrictions based on the file location
-        allowed.extend(SyscallNameLists::filesystem);
-    }
-
     if (policy.allowed_capabilities.contains(LinuxCapability::ProcessManagement))
         allowed.extend(SyscallNameLists::process_management);
+
+    // bubblewrap will provide specific restrictions on what files can be accessed
+    if (policy.allowed_capabilities.contains(LinuxCapability::FilesystemEmpty)) {
+        allowed.extend(SyscallNameLists::filesystem_basic);
+    }
+
+    if (policy.allowed_capabilities.contains(LinuxCapability::FilesystemUserFiles) || policy.allowed_capabilities.contains(LinuxCapability::FilesystemCacheFiles)) {
+        if (!policy.allowed_capabilities.contains(LinuxCapability::FilesystemEmpty))
+            allowed.extend(SyscallNameLists::filesystem_basic);
+        allowed.extend(SyscallNameLists::filesystem_additional);
+    }
 
     return allowed;
 }
@@ -138,7 +144,7 @@ ErrorOr<scmp_filter_ctx> GetSeccompCtxForProcessType(ProcessType type)
         TRY(AddAllowRule(ctx, syscall_nr, name));
     }
 
-    // Change the errno for denied syscalls where EPERM isn't a vaild response or isn't desired
+    // Change the errno for denied syscalls where EPERM is invalid or undesired
     for (ByteString const name : errno_override_if_denied) {
         if (!allowed_syscalls.contains(name)) {
             int syscall_nr = seccomp_syscall_resolve_name(name.characters());
