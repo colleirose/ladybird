@@ -218,7 +218,7 @@ ErrorOr<SubjectPublicKey> parse_subject_public_key_info(ASN1::Decoder& decoder, 
     READ_OBJECT(BitString, Crypto::ASN1::BitStringView, value);
     POP_SCOPE();
 
-    public_key.raw_key = TRY(ByteBuffer::copy(TRY(value.raw_bytes())));
+    public_key.raw_key = TRY(ByteBuffer::copy(TRY(value.raw_bytes()), AK::EraseBufferOnFree::No));
 
     if (public_key.algorithm.identifier.span() == ASN1::rsa_encryption_oid.span()) {
         auto maybe_key = Crypto::PK::RSA::parse_rsa_key(public_key.raw_key, false, current_scope);
@@ -301,7 +301,7 @@ ErrorOr<PrivateKey> parse_private_key_info(ASN1::Decoder& decoder, Vector<String
     READ_OBJECT(OctetString, StringView, value);
     POP_SCOPE();
 
-    private_key.raw_key = TRY(ByteBuffer::copy(value.bytes()));
+    private_key.raw_key = TRY(ByteBuffer::copy(value.bytes(), AK::EraseBufferOnFree::Yes));
 
     if (private_key.algorithm.identifier.span() == ASN1::rsa_encryption_oid.span()) {
         auto maybe_key = Crypto::PK::RSA::parse_rsa_key(value.bytes(), true, current_scope);

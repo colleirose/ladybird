@@ -62,17 +62,17 @@ ErrorOr<Process::ProcessAndIPCTransport> Process::spawn_and_connect_to_process(P
 #if defined(AK_OS_LINUX)
     Sandbox::LinuxSandboxPolicy policy = Sandbox::GetPolicyForProcessType(options.process_type);
     if (policy.use_bubblewrap && Sandbox::IsBubblewrapSupported()) {
-        spawn_options.executable = ByteString("/usr/bin/bwrap");
+        spawn_options.executable = "/usr/bin/bwrap";
         spawn_options.arguments = TRY(Sandbox::CreateBwrapArguments(options));
     }
 #elif defined(AK_OS_WINDOWS)
     Sandbox::WindowsSandboxPolicy policy = Sandbox::GetPolicyForProcessType(options.process_type);
     if (policy.use_appcontainer) {
-        spawn_options.windows_options.type = Core::WindowsStartupOptionsType::AttributeList;
-        spawn_options.windows_options.value = TRY(Sandbox::CreateAppContainerAttributesForPolicy(policy));
+        spawn_options.windows_options.startup_type = Core::WindowsStartupOptionsType::AttributeList;
+        spawn_options.windows_options.startup_val = TRY(Sandbox::CreateWindowsAttributeListForPolicy(policy));
     } else {
-        spawn_options.windows_options.type = Core::WindowsStartupOptionsType::Token;
-        spawn_options.windows_options.value = TRY(Sandbox::GetSandboxedPrimaryToken());
+        spawn_options.windows_options.startup_type = Core::WindowsStartupOptionsType::Token;
+        spawn_options.windows_options.startup_val = TRY(Sandbox::GetSandboxedPrimaryToken());
     }
 #endif
 

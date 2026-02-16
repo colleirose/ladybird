@@ -49,7 +49,7 @@ ErrorOr<Process> Process::spawn(ProcessSpawnOptions const& options)
 
     auto windows_options = options.windows_options;
 
-    if (windows_options.startup_options_type == WindowsStartupOptionsType::Unspecified)
+    if (windows_options.startup_type == WindowsStartupOptionsType::Unspecified)
         return Error::from_string_literal("invalid startup type provided");
 
     if (windows_options.alt_desktop_name == "")
@@ -76,14 +76,13 @@ ErrorOr<Process> Process::spawn(ProcessSpawnOptions const& options)
 
     DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
     BOOL result;
-    auto saved_last_err;
-    if (windows_options.startup_options_type == WindowsStartupOptionsType::AttributeList) {
+    auto last_error;
+    if (windows_options.startup_type == WindowsStartupOptionsType::AttributeList) {
         creation_flags &= EXTENDED_STARTUPINFO_PRESENT;
         STARTUPINFOEXW startup_info_ex {};
         startup_info_ex.cb = sizeof(STARTUPINFOEXW);
         startup_info_ex.StartupInfo.lpDesktop = const_cast<LPWSTR>(windows_options.alt_desktop_name);
-        startup_info_ex.lpAttributeList = windows_options.startup_options_value;
-        // FIX-BEFORE-PR: may be fine to rewrite startup info as &startup_info_ex, test later
+        startup_info_ex.lpAttributeList = windows_options.startup_val;
         result = CreateProcessW(
             NULL,                                               // application name
             (char*)command_line.data(),                         // process to run
@@ -96,30 +95,30 @@ ErrorOr<Process> Process::spawn(ProcessSpawnOptions const& options)
             reinterpret_cast<LPSTARTUPINFOW>(&startup_info_ex), // startup info
             &process_info                                       // process info
         );
-        saved_last_err = GetLastError();
+        last_error = GetLastError();
         DeleteProcThreadAttributeList(startup_info_ex.lpAttributeList);
-        Windows::HeapFree(heap, 0, startup_info_ex.lpAttributeList);
+        free(startup_info_ex.lpAttributeList);
     } else {
         STARTUPINFOW startup_info = {};
         startup_info.lpDesktop = const_cast<LPWSTR>(windows_options.alt_desktop_name);
         result = CreateProcessAsUserW(
-            windows_options.startup_options_value, // low-privileged token to run as
-            NULL,                                  // application name
-            (char*)command_line.data(),            // process to run
-            NULL,                                  // process security attributes
-            NULL,                                  // primary thread security attributes
-            TRUE,                                  // handles are inherited
-            creation_flags,                        // creation flags
-            NULL,                                  // use parent's environment
-            NULL,                                  // working directory
-            &startup_info,                         // startup info
-            &process_info                          // process info
+            windows_options.startup_val, // low-privileged token to run as
+            NULL,                        // application name
+            (char*)command_line.data(),  // process to run
+            NULL,                        // process security attributes
+            NULL,                        // primary thread security attributes
+            TRUE,                        // handles are inherited
+            creation_flags,              // creation flags
+            NULL,                        // use parent's environment
+            NULL,                        // working directory
+            &startup_info,               // startup info
+            &process_info                // process info
         );
-        saved_last_err = GetLastError();
+        last_error = GetLastError();
     }
 
     if (!result)
-        return Error::from_windows_error(saved_last_err);
+        return Error::from_windows_error(last_error);
 
     return Process(process_info.hProcess);
 }

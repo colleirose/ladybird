@@ -378,7 +378,7 @@ JS::ThrowCompletionOr<GC::Ref<WebIDL::Promise>> SubtleCrypto::import_key(Binding
         }
 
         // 2. Let keyData be the result of getting a copy of the bytes held by the keyData parameter passed to the importKey() method.
-        real_key_data = MUST(WebIDL::get_buffer_source_copy(*key_data.get<GC::Root<WebIDL::BufferSource>>()->raw_object()));
+        real_key_data = MUST(WebIDL::get_buffer_source_copy(*key_data.get<GC::Root<WebIDL::BufferSource>>()->raw_object(), AK::EraseBufferOnFree::Yes));
     }
 
     if (format == Bindings::KeyFormat::Jwk) {
@@ -726,7 +726,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::derive_key(AlgorithmIdentifier algorithm,
         }
 
         // 15. Let result be the result of performing the import key operation specified by normalizedDerivedKeyAlgorithmImport using "raw" as format, secret as keyData, derivedKeyType as algorithm and using extractable and usages.
-        auto result_or_error = normalized_derived_key_algorithm_import.methods->import_key(*normalized_derived_key_algorithm_import.parameter, Bindings::KeyFormat::Raw, secret.release_value()->buffer(), extractable, key_usages);
+        auto result_or_error = normalized_derived_key_algorithm_import.methods->import_key(*normalized_derived_key_algorithm_import.parameter, Bindings::KeyFormat::Raw, secret.release_value()->buffer(AK::EraseBufferOnFree::Yes), extractable, key_usages);
         if (result_or_error.is_error()) {
             WebIDL::reject_promise(realm, promise, Bindings::exception_to_throw_completion(realm.vm(), result_or_error.release_error()).release_value());
             return;
@@ -834,7 +834,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::wrap_key(Bindings::KeyFormat format, GC::
         // 13. If format is equal to the strings "raw", "pkcs8", or "spki":
         if (format == Bindings::KeyFormat::Raw || format == Bindings::KeyFormat::Pkcs8 || format == Bindings::KeyFormat::Spki) {
             // Set bytes be set to key.
-            bytes = as<JS::ArrayBuffer>(*key_data).buffer();
+            bytes = as<JS::ArrayBuffer>(*key_data).buffer(AK::EraseBufferOnFree::Yes);
         }
 
         // If format is equal to the string "jwk":
@@ -850,7 +850,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::wrap_key(Bindings::KeyFormat format, GC::
             }
 
             // 3. Let bytes be the result of UTF-8 encoding json.
-            bytes = MUST(ByteBuffer::copy(maybe_json.value()->bytes()));
+            bytes = MUST(ByteBuffer::copy(maybe_json.value()->bytes(), AK::EraseBufferOnFree::Yes));
         } else {
             VERIFY_NOT_REACHED();
         }
@@ -993,13 +993,13 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::unwrap_key(Bindings::KeyFormat format, Ke
         // 14. If format is equal to the strings "raw", "pkcs8", or "spki":
         if (format == Bindings::KeyFormat::Raw || format == Bindings::KeyFormat::Pkcs8 || format == Bindings::KeyFormat::Spki) {
             // Set bytes be set to key.
-            bytes = key->buffer();
+            bytes = key->buffer(AK::EraseBufferOnFree::Yes);
         }
 
         // If format is equal to the string "jwk":
         else if (format == Bindings::KeyFormat::Jwk) {
             // Let bytes be the result of executing the parse a JWK algorithm, with key as the data to be parsed.
-            auto maybe_parsed = Bindings::JsonWebKey::parse(realm, key->buffer());
+            auto maybe_parsed = Bindings::JsonWebKey::parse(realm, key->buffer(AK::EraseBufferOnFree::Yes));
             if (maybe_parsed.is_error()) {
                 WebIDL::reject_promise(realm, promise, maybe_parsed.release_error().release_value());
                 return;
@@ -1317,7 +1317,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::decapsulate_key(AlgorithmIdentifier decap
         auto maybe_shared_key = normalized_shared_key_algorithm.methods->import_key(
             *normalized_shared_key_algorithm.parameter,
             Bindings::KeyFormat::RawSecret,
-            decapsulated_bits->buffer(),
+            decapsulated_bits->buffer(AK::EraseBufferOnFree::Yes),
             extractable,
             usages);
         if (maybe_shared_key.is_error()) {

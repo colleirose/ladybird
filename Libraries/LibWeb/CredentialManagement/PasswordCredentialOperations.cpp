@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <LibCore/SecretString.h>
 #include <LibWeb/CredentialManagement/PasswordCredentialOperations.h>
 #include <LibWeb/HTML/HTMLFormElement.h>
 #include <LibWeb/XHR/FormData.h>
@@ -52,6 +53,7 @@ WebIDL::ExceptionOr<GC::Ref<PasswordCredential>> create_password_credential(JS::
                     // ALSO related itd be better if we didnt make a string and stuff because it might be in memory and not get cleared?
                     auto password_string = password.get<String>();
                     data.password = Core::SecretString(password_string.bytes(), password_string.byte_count());
+                    password_string.clear_sensitive();
                     new_password_observed = true;
                 }
             }
@@ -64,6 +66,7 @@ WebIDL::ExceptionOr<GC::Ref<PasswordCredential>> create_password_credential(JS::
                 if (auto password = form_data->get(name.value()); password.has<String>()) {
                     auto password_string = password.get<String>();
                     data.password = Core::SecretString(password_string.bytes(), password_string.byte_count());
+                    password_string.clear_sensitive();
                 }
             }
             //    - "photo"

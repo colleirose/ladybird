@@ -42,7 +42,7 @@ static ErrorOr<ByteBuffer> read_mlkem_seed(ASN1::Decoder& decoder, Vector<String
     }
     POP_SCOPE();
 
-    return ByteBuffer::copy(seed);
+    return ByteBuffer::copy(seed, AK::EraseBufferOnFree::Yes);
 }
 
 static ErrorOr<ByteBuffer> read_mlkem_private_key(MLKEMSize size, ASN1::Decoder& decoder, Vector<StringView>& current_scope)
@@ -74,7 +74,7 @@ static ErrorOr<ByteBuffer> read_mlkem_private_key(MLKEMSize size, ASN1::Decoder&
     }
     POP_SCOPE();
 
-    return ByteBuffer::copy(expanded_key);
+    return ByteBuffer::copy(expanded_key, AK::EraseBufferOnFree::Yes);
 }
 
 ErrorOr<ByteBuffer> MLKEMPrivateKey::export_as_der() const
@@ -147,8 +147,8 @@ ErrorOr<MLKEMEncapsulation> MLKEM::encapsulate(MLKEMSize size, MLKEMPublicKey co
     size_t ciphertext_length;
     OPENSSL_TRY(EVP_PKEY_encapsulate(ctx.ptr(), nullptr, &ciphertext_length, nullptr, &shared_key_size));
 
-    auto shared_key = TRY(ByteBuffer::create_uninitialized(shared_key_size));
-    auto ciphertext = TRY(ByteBuffer::create_uninitialized(ciphertext_length));
+    auto shared_key = TRY(ByteBuffer::create_uninitialized(shared_key_size, AK::EraseBufferOnFree::No));
+    auto ciphertext = TRY(ByteBuffer::create_uninitialized(ciphertext_length, AK::EraseBufferOnFree::Yes));
 
     OPENSSL_TRY(EVP_PKEY_encapsulate(ctx.ptr(), ciphertext.data(), &ciphertext_length, shared_key.data(), &shared_key_size));
 
@@ -181,7 +181,6 @@ static ErrorOr<OpenSSL_PKEY> private_key_to_openssl_pkey(MLKEMSize size, MLKEMPr
 ErrorOr<ByteBuffer> MLKEM::decapsulate(MLKEMSize size, MLKEMPrivateKey const& key, ByteBuffer ciphertext)
 {
     auto private_key = TRY(private_key_to_openssl_pkey(size, key));
-
     auto ctx = TRY(OpenSSL_PKEY_CTX::wrap(EVP_PKEY_CTX_new_from_pkey(nullptr, private_key.ptr(), nullptr)));
 
     OPENSSL_TRY(EVP_PKEY_decapsulate_init(ctx.ptr(), nullptr));
@@ -189,7 +188,7 @@ ErrorOr<ByteBuffer> MLKEM::decapsulate(MLKEMSize size, MLKEMPrivateKey const& ke
     size_t shared_key_size;
     OPENSSL_TRY(EVP_PKEY_decapsulate(ctx.ptr(), nullptr, &shared_key_size, ciphertext.data(), ciphertext.size()));
 
-    auto shared_key = TRY(ByteBuffer::create_uninitialized(shared_key_size));
+    auto shared_key = TRY(ByteBuffer::create_uninitialized(shared_key_size, AK::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_decapsulate(ctx.ptr(), shared_key.data(), &shared_key_size, ciphertext.data(), ciphertext.size()));
 
     return shared_key;

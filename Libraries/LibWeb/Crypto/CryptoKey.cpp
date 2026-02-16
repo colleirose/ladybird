@@ -20,6 +20,7 @@ GC_DEFINE_ALLOCATOR(CryptoKeyPair);
 
 GC::Ref<CryptoKey> CryptoKey::create(JS::Realm& realm, InternalKeyData key_data)
 {
+    key_data.visit([](ByteBuffer buf) { return ByteBuffer(move(buf), AK::EraseBufferOnFree::Yes); });
     return realm.create<CryptoKey>(realm, move(key_data));
 }
 
@@ -40,7 +41,7 @@ CryptoKey::CryptoKey(JS::Realm& realm)
     : PlatformObject(realm)
     , m_algorithm(Object::create(realm, nullptr))
     , m_usages(Object::create(realm, nullptr))
-    , m_key_data(MUST(ByteBuffer::create_uninitialized(0)))
+    , m_key_data(MUST(ByteBuffer::create_uninitialized(0, AK::EraseBufferOnFree::Yes)))
 {
 }
 
@@ -48,7 +49,6 @@ void CryptoKey::finalize()
 {
     Base::finalize();
     m_key_data.visit(
-        [](ByteBuffer& data) { secure_memzero(data.data(), data.size()); },
         [](auto& data) { secure_memzero(reinterpret_cast<u8*>(&data), sizeof(data)); });
 }
 

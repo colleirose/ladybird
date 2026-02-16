@@ -34,7 +34,7 @@ ErrorOr<ByteBuffer> SHAKE::digest(
     }
 
     size_t output_bytes = length / 8;
-    auto buf = TRY(ByteBuffer::create_uninitialized(output_bytes));
+    auto buf = TRY(ByteBuffer::create_uninitialized(output_bytes, AK::EraseBufferOnFree::Yes));
 
     auto ctx = TRY(OpenSSL_MD_CTX::wrap(EVP_MD_CTX_new()));
 

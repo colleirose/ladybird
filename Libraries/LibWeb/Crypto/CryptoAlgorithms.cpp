@@ -19,7 +19,6 @@
 #include <LibCrypto/Certificate/Certificate.h>
 #include <LibCrypto/Cipher/AES.h>
 #include <LibCrypto/Cipher/ChaCha.h>
-#include <LibCrypto/ConstantTimeBase64.h>
 #include <LibCrypto/Curves/EdwardsCurve.h>
 #include <LibCrypto/Curves/SECPxxxr1.h>
 #include <LibCrypto/Hash/Argon2.h>
@@ -32,6 +31,7 @@
 #include <LibCrypto/PK/MLDSA.h>
 #include <LibCrypto/PK/MLKEM.h>
 #include <LibCrypto/PK/RSA.h>
+#include <LibCrypto/SecureBase64.h>
 #include <LibJS/Runtime/Array.h>
 #include <LibJS/Runtime/ArrayBuffer.h>
 #include <LibJS/Runtime/DataView.h>
@@ -110,7 +110,7 @@ ErrorOr<String> base64_url_uint_encode(::Crypto::UnsignedBigInteger integer)
     // value.  Zero is represented as BASE64URL(single zero-valued
     // octet), which is "AA".
 
-    auto bytes = TRY(ByteBuffer::create_uninitialized(integer.byte_length()));
+    auto bytes = TRY(ByteBuffer::create_uninitialized(integer.byte_length(), AK::EraseBufferOnFree::Yes));
     auto result = integer.export_data(bytes.span());
     return TRY(SecureBase64UrlEncode(result, AK::OmitPadding::Yes));
 }
@@ -277,7 +277,7 @@ static WebIDL::ExceptionOr<void> validate_jwk_key_ops(JS::Realm& realm, Bindings
 
 static WebIDL::ExceptionOr<ByteBuffer> generate_random_key(JS::VM& vm, u16 const size_in_bits)
 {
-    auto key_buffer = TRY_OR_THROW_OOM(vm, ByteBuffer::create_uninitialized(size_in_bits / 8));
+    auto key_buffer = TRY_OR_THROW_OOM(vm, ByteBuffer::create_uninitialized(size_in_bits / 8, AK::EraseBufferOnFree::Yes));
     fill_with_random(key_buffer);
     return key_buffer;
 }
@@ -3750,7 +3750,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::ArrayBuffer>> SHA::digest(AlgorithmParams const&
     hash.update(data);
 
     auto digest = hash.digest();
-    auto result_buffer = ByteBuffer::copy(digest.immutable_data(), hash.digest_size());
+    auto result_buffer = ByteBuffer::copy(digest.immutable_data(), hash.digest_size(), AK::EraseBufferOnFree::Yes);
     if (result_buffer.is_error())
         return WebIDL::OperationError::create(m_realm, "Failed to create result buffer"_utf16);
 
@@ -3890,7 +3890,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::ArrayBuffer>> ECDSA::sign(AlgorithmParams const&
     hash.update(message);
     auto digest = hash.digest();
 
-    auto M = TRY_OR_THROW_OOM(vm, ByteBuffer::copy(digest.immutable_data(), hash.digest_size()));
+    auto M = TRY_OR_THROW_OOM(vm, ByteBuffer::copy(digest.immutable_data(), hash.digest_size(), AK::EraseBufferOnFree::Yes));
 
     // 4. Let d be the ECDSA private key associated with key.
     auto d = key->handle().get<::Crypto::PK::ECPrivateKey>();
@@ -3932,7 +3932,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::ArrayBuffer>> ECDSA::sign(AlgorithmParams const&
         auto signature = maybe_signature.release_value();
 
         // 3. Let result be an empty byte sequence.
-        result = TRY_OR_THROW_OOM(vm, ByteBuffer::create_zeroed(coord_size * 2));
+        result = TRY_OR_THROW_OOM(vm, ByteBuffer::create_zeroed(coord_size * 2, AK::EraseBufferOnFree::Yes));
 
         // 4. Let n be the smallest integer such that n * 8 is greater than the logarithm to base 2 of the order of the base point of the elliptic curve identified by params.
         // 5. Convert r to an octet string of length n and append this sequence of bytes to result.
@@ -3985,7 +3985,7 @@ WebIDL::ExceptionOr<JS::Value> ECDSA::verify(AlgorithmParams const& params, GC::
     hash.update(message);
     auto digest = hash.digest();
 
-    auto M = TRY_OR_THROW_OOM(realm.vm(), ByteBuffer::copy(digest.immutable_data(), hash.digest_size()));
+    auto M = TRY_OR_THROW_OOM(realm.vm(), ByteBuffer::copy(digest.immutable_data(), hash.digest_size(), AK::EraseBufferOnFree::No));
 
     // 4. Let Q be the ECDSA public key associated with key.
     auto Q = key->handle().get<::Crypto::PK::ECPublicKey>();
@@ -5912,7 +5912,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ED25519::import_key(
         //    specified in Section 7 of [RFC8410], and exactData set to true.
         // 7. If an error occurred while parsing, then throw a DataError.
         auto curve_private_key = TRY(parse_an_ASN1_structure<StringView>(m_realm, private_key_info.raw_key, true));
-        auto curve_private_key_bytes = TRY_OR_THROW_OOM(m_realm->vm(), ByteBuffer::copy(curve_private_key.bytes()));
+        auto curve_private_key_bytes = TRY_OR_THROW_OOM(m_realm->vm(), ByteBuffer::copy(curve_private_key.bytes(), AK::EraseBufferOnFree::Yes));
 
         // 8. Let key be a new CryptoKey associated with the relevant global object of this [HTML],
         //    and that represents the Ed25519 private key identified by curvePrivateKey.
@@ -6236,7 +6236,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::ArrayBuffer>> ED25519::sign([[maybe_unused]] Alg
 
     // 3. Return a new ArrayBuffer associated with the relevant global object of this [HTML],
     // and containing the bytes of the signature resulting from performing the Ed25519 signing process.
-    auto result = TRY_OR_THROW_OOM(vm, ByteBuffer::copy(signature));
+    auto result = TRY_OR_THROW_OOM(vm, ByteBuffer::copy(signature, AK::EraseBufferOnFree::Yes));
     return JS::ArrayBuffer::create(realm, move(result));
 }
 
@@ -6417,7 +6417,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> ED448::import_key(
         //    specified in Section 7 of [RFC8410], and exactData set to true.
         // 7. If an error occurred while parsing, then throw a DataError.
         auto curve_private_key = TRY(parse_an_ASN1_structure<StringView>(m_realm, private_key_info.raw_key, true));
-        auto curve_private_key_bytes = TRY_OR_THROW_OOM(m_realm->vm(), ByteBuffer::copy(curve_private_key.bytes()));
+        auto curve_private_key_bytes = TRY_OR_THROW_OOM(m_realm->vm(), ByteBuffer::copy(curve_private_key.bytes(), AK::EraseBufferOnFree::Yes));
 
         // 8. Let key be a new CryptoKey associated with the relevant global object of this [HTML],
         //    and that represents the Ed448 private key identified by curvePrivateKey.
@@ -6989,7 +6989,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::ArrayBuffer>> X25519::derive_bits(AlgorithmParam
 
     // 7. If length is null: Return secret
     if (!length_optional.has_value()) {
-        auto result = TRY_OR_THROW_OOM(realm.vm(), ByteBuffer::copy(secret));
+        auto result = TRY_OR_THROW_OOM(realm.vm(), ByteBuffer::copy(secret, AK::EraseBufferOnFree::Yes));
         return JS::ArrayBuffer::create(realm, move(result));
     }
 
@@ -7151,7 +7151,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> X25519::import_key([[maybe_unused]] Web:
         //    exactData set to true.
         // 7. If an error occurred while parsing, then throw a DataError.
         auto curve_private_key = TRY(parse_an_ASN1_structure<StringView>(m_realm, private_key_info.raw_key, true));
-        auto curve_private_key_bytes = TRY_OR_THROW_OOM(vm, ByteBuffer::copy(curve_private_key.bytes()));
+        auto curve_private_key_bytes = TRY_OR_THROW_OOM(vm, ByteBuffer::copy(curve_private_key.bytes(), AK::EraseBufferOnFree::Yes));
 
         // 8. Let key be a new CryptoKey associated with the relevant global object of this [HTML],
         //    and that represents the X25519 private key identified by curvePrivateKey.
@@ -7495,7 +7495,7 @@ WebIDL::ExceptionOr<GC::Ref<JS::ArrayBuffer>> X448::derive_bits(
 
     // 7. If length is null: Return secret
     if (!length_optional.has_value()) {
-        auto result = TRY_OR_THROW_OOM(m_realm->vm(), ByteBuffer::copy(secret));
+        auto result = TRY_OR_THROW_OOM(m_realm->vm(), ByteBuffer::copy(secret, AK::EraseBufferOnFree::Yes));
         return JS::ArrayBuffer::create(m_realm, move(result));
     }
 
@@ -7761,7 +7761,7 @@ WebIDL::ExceptionOr<GC::Ref<CryptoKey>> X448::import_key(
         //    structure specified in Section 7 of [RFC8410], and exactData set to true.
         // 7. If an error occurred while parsing, then throw a DataError.
         auto curve_private_key = TRY(parse_an_ASN1_structure<StringView>(m_realm, private_key_info.raw_key, true));
-        auto curve_private_key_bytes = TRY_OR_THROW_OOM(m_realm->vm(), ByteBuffer::copy(curve_private_key.bytes()));
+        auto curve_private_key_bytes = TRY_OR_THROW_OOM(m_realm->vm(), ByteBuffer::copy(curve_private_key.bytes(), AK::EraseBufferOnFree::Yes));
 
         // 8. Let key be a new CryptoKey associated with the relevant global object of this [HTML], and that represents the X448 private key identified by curvePrivateKey.
         auto key = CryptoKey::create(m_realm, CryptoKey::InternalKeyData { curve_private_key_bytes });

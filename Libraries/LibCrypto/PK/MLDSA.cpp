@@ -44,7 +44,7 @@ static ErrorOr<ByteBuffer> read_mldsa_seed(ASN1::Decoder& decoder, Vector<String
     }
     POP_SCOPE();
 
-    return ByteBuffer::copy(seed);
+    return ByteBuffer::copy(seed, AK::EraseBufferOnFree::Yes);
 }
 
 static ErrorOr<ByteBuffer> read_mldsa_private_key(MLDSASize size, ASN1::Decoder& decoder, Vector<StringView>& current_scope)
@@ -76,7 +76,7 @@ static ErrorOr<ByteBuffer> read_mldsa_private_key(MLDSASize size, ASN1::Decoder&
     }
     POP_SCOPE();
 
-    return ByteBuffer::copy(expanded_key);
+    return ByteBuffer::copy(expanded_key, AK::EraseBufferOnFree::Yes);
 }
 
 ErrorOr<ByteBuffer> MLDSAPrivateKey::export_as_der() const
@@ -213,7 +213,7 @@ ErrorOr<ByteBuffer> MLDSA::sign(ReadonlyBytes message)
     OPENSSL_TRY(EVP_PKEY_sign_message_init(sign_ctx, sign_algorithm, params));
     OPENSSL_TRY(EVP_PKEY_sign(sign_ctx, nullptr, &sign_size, message.data(), message.size()));
 
-    auto result = TRY(ByteBuffer::create_uninitialized(sign_size));
+    auto result = TRY(ByteBuffer::create_uninitialized(sign_size, AK::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_sign(sign_ctx, result.data(), &sign_size, message.data(), message.size()));
 
     return result;

@@ -91,6 +91,7 @@ public:
     [[nodiscard]] StringView string_view() const;
     [[nodiscard]] Utf16View utf16_string_view() const;
     void clear();
+    void clear_sensitive();
 
     [[nodiscard]] size_t length() const;
     [[nodiscard]] bool is_empty() const;

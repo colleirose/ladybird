@@ -81,8 +81,8 @@ public:
     size_t byte_length() const { return m_data_block.size(); }
 
     // [[ArrayBufferData]]
-    ByteBuffer& buffer() { return m_data_block.buffer(); }
-    ByteBuffer const& buffer() const { return m_data_block.buffer(); }
+    ByteBuffer& buffer(AK::EraseBufferOnFree erase_option) { return ByteBuffer(m_data_block.buffer(), erase_option); }
+    ByteBuffer const& buffer(AK::EraseBufferOnFree erase_option = AK::EraseBufferOnFree::Unspecified) const { return ByteBuffer(m_data_block.buffer(), erase_option); }
 
     // [[ArrayBufferMaxByteLength]]
     size_t max_byte_length() const { return m_max_byte_length.value(); }

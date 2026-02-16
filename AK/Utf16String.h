@@ -205,6 +205,13 @@ public:
         return Utf16String::from_utf16(utf16_view().trim(code_units, mode));
     }
 
+    // Erases whatever data is in the string
+    void String::clear_sensitive()
+    {
+        secure_memzero(reinterpret_cast<void*> raw(), byte_count());
+        this = ""_string;
+    }
+
     ALWAYS_INLINE Utf16String trim_ascii_whitespace(TrimMode mode = TrimMode::Both) const
     {
         return trim(" \n\t\v\f\r"sv, mode);

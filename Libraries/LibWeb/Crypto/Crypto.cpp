@@ -67,7 +67,7 @@ WebIDL::ExceptionOr<GC::Root<WebIDL::ArrayBufferView>> Crypto::get_random_values
         return WebIDL::QuotaExceededError::create(realm(), "array's byteLength may not be greater than 65536"_utf16);
 
     // 3. Overwrite all elements of array with cryptographically strong random values of the appropriate type.
-    fill_with_random(array->viewed_array_buffer()->buffer().bytes().slice(array->byte_offset(), array->byte_length()));
+    fill_with_random(array->viewed_array_buffer()->buffer(AK::EraseBufferOnFree::Yes).bytes().slice(array->byte_offset(), array->byte_length()));
 
     // 4. Return array.
     return array;
@@ -138,9 +138,11 @@ ErrorOr<String> generate_random_uuid()
     TRY(builder.try_appendff("{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}", bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]));
 
     // NB: Erase unneeded copies of the secret value from memory
+    auto res = builder.to_string();
     secure_memzero(bytes, sizeof(bytes));
+    builder.clear_sensitive();
 
-    return builder.to_string();
+    return res;
 }
 
 }

@@ -35,7 +35,7 @@ bool is_buffer_source_type(JS::Value value)
 }
 
 // https://webidl.spec.whatwg.org/#dfn-get-buffer-source-copy
-ErrorOr<ByteBuffer> get_buffer_source_copy(JS::Object const& buffer_source)
+ErrorOr<ByteBuffer> get_buffer_source_copy(JS::Object const& buffer_source, AK::EraseBufferOnFree erase_option = AK::EraseBufferOnFree::Unspecified)
 {
     // 1. Let esBufferSource be the result of converting bufferSource to an ECMAScript value.
 
@@ -100,7 +100,7 @@ ErrorOr<ByteBuffer> get_buffer_source_copy(JS::Object const& buffer_source)
         return ByteBuffer {};
 
     // 8. Let bytes be a new byte sequence of length equal to length.
-    auto bytes = TRY(ByteBuffer::create_zeroed(length));
+    auto bytes = TRY(ByteBuffer::create_zeroed(length, erase_option));
 
     // 9. For i in the range offset to offset + length − 1, inclusive, set bytes[i − offset] to ! GetValueFromBuffer(esArrayBuffer, i, Uint8, true, Unordered).
     for (u64 i = offset; i < offset + length; ++i) {

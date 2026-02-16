@@ -6,7 +6,7 @@
 
 #include <AK/GenericLexer.h>
 #include <LibCrypto/ASN1/PEM.h>
-#include <LibCrypto/ConstantTimeBase64.h>
+#include <LibCrypto/SecureBase64.h>
 
 namespace Crypto {
 
@@ -146,7 +146,7 @@ ErrorOr<Vector<DecodedPEM>> decode_pems(ReadonlyBytes data)
 
 ErrorOr<ByteBuffer> encode_pem(ReadonlyBytes data, PEMType type)
 {
-    ByteBuffer encoded;
+    bool is_secret_value = true;
     StringView block_start;
     StringView block_end;
 
@@ -164,10 +164,12 @@ ErrorOr<ByteBuffer> encode_pem(ReadonlyBytes data, PEMType type)
         block_end = "-----END RSA PRIVATE KEY-----\n"sv;
         break;
     case PEMType::PublicKey:
+        is_secret_value = false;
         block_start = "-----BEGIN PUBLIC KEY-----\n"sv;
         block_end = "-----END PUBLIC KEY-----\n"sv;
         break;
     case PEMType::RSAPublicKey:
+        is_secret_value = false;
         block_start = "-----BEGIN RSA PUBLIC KEY-----\n"sv;
         block_end = "-----END RSA PUBLIC KEY-----\n"sv;
         break;
@@ -175,15 +177,17 @@ ErrorOr<ByteBuffer> encode_pem(ReadonlyBytes data, PEMType type)
         VERIFY_NOT_REACHED();
     }
 
-    TRY(encoded.try_append(block_start.bytes()));
-
     size_t to_read = 64;
     auto b64encoded;
-    if (type == PEMType::PublicKey || type == PEMType::RSAPublicKey) {
+    if (is_secret_value) {
         b64encoded = TRY(encode_base64(data));
     } else {
         b64encoded = TRY(SecureBase64Encode(data));
     }
+
+    size_t starting_size = block_start.size() + block_end.size() + to_read;
+    ByteBuffer encoded = ByteBuffer::create_uninitialized(starting_size, is_secret_value ? AK::EraseBufferOnFree::Yes : AK::EraseBufferOnFree::No);
+    TRY(encoded.try_append(block_start.bytes()));
 
     for (size_t i = 0; i < b64encoded.bytes().size(); i += to_read) {
         if (i + to_read > b64encoded.bytes().size())

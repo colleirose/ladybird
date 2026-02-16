@@ -17,7 +17,7 @@ struct DesktopObject {
 };
 
 ErrorOr<HWINSTA> GetSandboxedWindowStation();
-ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta);
+ErrorOr<DesktopObject> GetSandboxedAltDesktop(HWINSTA winsta = nullptr);
 
 private:
 ErrorOr<void> FixTokenDefaultDaclForWindowObjects(HANDLE token, HWINSTA winsta, HDESK desktop);

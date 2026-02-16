@@ -7,6 +7,7 @@
  */
 
 #pragma once
+#include <AK/Types.h>
 #include <LibCore/Windows/Windows.h>
 
 namespace Core::Windows {
@@ -19,7 +20,7 @@ public:
     // INVALID_HANDLE_VALUE is never closed.
     OwnedHandle() noexcept = default;
     OwnedHandle(Core::Windows::OwnedHandle h) noexcept
-        : handle_(h)
+        : m_win32_handle(h)
     {
     }
 
@@ -27,9 +28,14 @@ public:
     OwnedHandle& operator=(OwnedHandle const&) = delete;
 
     OwnedHandle(OwnedHandle&& other) noexcept
-        : handle_(other.handle_)
+        : m_win32_handle(other.m_win32_handle)
     {
-        other.handle_ = nullptr;
+        other.m_win32_handle = nullptr;
+    }
+
+    ~OwnedHandle()
+    {
+        reset();
     }
 
     // This operation can only be done when handle is NULL
@@ -37,60 +43,71 @@ public:
     {
         if (this != &other) {
             reset();
-            handle_ = other.handle_;
-            other.handle_ = nullptr;
+            m_win32_handle = other.m_win32_handle;
+            other.m_win32_handle = nullptr;
         }
         return *this;
     }
 
-    bool operator==(OwnedHandle const& h) const { return handle_ == h.get_raw(); }
-    bool operator==(HANDLE h) const { return handle_ == h; }
-
-    ~OwnedHandle()
-    {
-        reset();
-    }
+    bool operator==(OwnedHandle const& h) const { return m_win32_handle == h.get_raw(); }
+    bool operator==(HANDLE h) const { return m_win32_handle == h; }
 
     // --- accessors ---
-    HANDLE get() const noexcept { return handle_; }
+    HANDLE get() const noexcept { return m_win32_handle; }
 
-    // is this really valid or needed?
-    operator HANDLE() const noexcept { return handle_; }
+    // FIX-BEFORE-PR: is this really valid or needed?
+    operator HANDLE() const noexcept { return m_win32_handle; }
 
     explicit operator bool() const noexcept
     {
-        return handle_ && handle != INVALID_HANDLE_VALUE;
+        return m_win32_handle && handle != INVALID_HANDLE_VALUE;
     }
 
     // --- ownership management ---
     HANDLE release() noexcept
     {
-        HANDLE tmp = handle_;
-        handle_ = nullptr;
+        HANDLE tmp = m_win32_handle;
+        m_win32_handle = nullptr;
         return tmp;
+    }
+
+    bool IsPseudoHandle()
+    {
+        // see:
+        // https://github.com/chromium/chromium/blob/16d6196943529ac4379678dbd75add87110273e6/base/win/windows_handle_util.h#L14-L31
+        auto val = static_cast<i32>(reinterpret_cast<uintptr_t>(m_win32_handle));
+        return value < 0 && value >= -12;
     }
 
     void reset(HANDLE h = nullptr) noexcept
     {
-        if (handle_ && handle_ != INVALID_HANDLE_VALUE) {
-            auto res = CloseHandle(handle_);
+        if (m_win32_handle != nullptr && !IsPseudoHandle(m_win32_handle)) {
+            // there is no case where setting the last error value after an owned handle goes out of scope is intended and useful
+            // also note that [successful calls can sometimes also set the last error value](https://learn.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror#return-value)
+            // which is how you get windows messages like "error: success"
+            // see also: https://issues.chromium.org/issues/40434446
+            DWORD previous_last_error = GetLastError();
+
+            auto res = CloseHandle(m_win32_handle);
             if (!res) {
                 auto err = Error::from_windows_error();
                 warnln("Failed to close handle when resetting: {}", err.string_literal());
             }
+
+            SetLastError(previous_last_error);
         }
 
-        handle_ = h;
+        m_win32_handle = h;
     }
 
     HANDLE* put() noexcept
     {
         reset();
-        return &handle_;
+        return &m_win32_handle;
     }
 
 private:
-    HANDLE handle_ = nullptr;
+    HANDLE m_win32_handle = nullptr;
 };
 
 template<>

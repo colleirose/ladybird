@@ -314,7 +314,7 @@ class Encoder {
 public:
     Encoder()
     {
-        m_buffer_stack.empend();
+        m_buffer_stack.empend(ByteBuffer(AK::EraseBufferOnFree::Yes));
     }
 
     ReadonlyBytes active_bytes() const LIFETIME_BOUND { return m_buffer_stack.last().bytes(); }
@@ -356,7 +356,7 @@ public:
     template<typename Fn>
     ErrorOr<void> write_constructed(u8 class_, u8 kind, Fn&& fn)
     {
-        m_buffer_stack.empend();
+        m_buffer_stack.empend(ByteBuffer(AK::EraseBufferOnFree::Yes));
         using ResultType = decltype(fn());
         if constexpr (IsSpecializationOf<ResultType, ErrorOr>) {
             TRY(fn());

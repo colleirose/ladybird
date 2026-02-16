@@ -18,11 +18,15 @@
 #define kmalloc malloc
 #define kmalloc_good_size malloc_good_size
 
-// Generally, if we know the size of some memory area when freeing, we can take advantage of this to zero the memory before freeing it.
-ALWAYS_INLINE void kfree_sized(void* ptr, size_t size)
+inline void kfree_sized(void* ptr, size_t)
+{
+    free(ptr);
+}
+
+inline void kfree_sized_sensitive(void* ptr, size_t size)
 {
     secure_memzero(ptr, size);
-    free(ptr);
+    kfree_sized(ptr, size);
 }
 
 #ifndef AK_OS_SERENITY

@@ -359,7 +359,7 @@ ErrorOr<ByteBuffer> RSA::encrypt(ReadonlyBytes in)
     size_t out_size = 0;
     OPENSSL_TRY(EVP_PKEY_encrypt(ctx.ptr(), nullptr, &out_size, in.data(), in.size()));
 
-    auto out = TRY(ByteBuffer::create_uninitialized(out_size));
+    auto out = TRY(ByteBuffer::create_uninitialized(out_size, AK::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_encrypt(ctx.ptr(), out.data(), &out_size, in.data(), in.size()));
     return out.slice(0, out_size);
 }
@@ -376,7 +376,7 @@ ErrorOr<ByteBuffer> RSA::decrypt(ReadonlyBytes in)
     size_t out_size = 0;
     OPENSSL_TRY(EVP_PKEY_decrypt(ctx.ptr(), nullptr, &out_size, in.data(), in.size()));
 
-    auto out = TRY(ByteBuffer::create_uninitialized(out_size));
+    auto out = TRY(ByteBuffer::create_uninitialized(out_size, AK::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_decrypt(ctx.ptr(), out.data(), &out_size, in.data(), in.size()));
     return out.slice(0, out_size);
 }
@@ -393,7 +393,7 @@ ErrorOr<ByteBuffer> RSA::sign(ReadonlyBytes message)
     size_t signature_size = 0;
     OPENSSL_TRY(EVP_PKEY_sign(ctx.ptr(), nullptr, &signature_size, message.data(), message.size()));
 
-    auto signature = TRY(ByteBuffer::create_uninitialized(signature_size));
+    auto signature = TRY(ByteBuffer::create_uninitialized(signature_size, AK::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_sign(ctx.ptr(), signature.data(), &signature_size, message.data(), message.size()));
     return signature.slice(0, signature_size);
 }
@@ -538,7 +538,7 @@ ErrorOr<ByteBuffer> RSA_EMSA::sign(ReadonlyBytes message)
     size_t signature_size = 0;
     OPENSSL_TRY(EVP_DigestSign(ctx.ptr(), nullptr, &signature_size, message.data(), message.size()));
 
-    auto signature = TRY(ByteBuffer::create_uninitialized(signature_size));
+    auto signature = TRY(ByteBuffer::create_uninitialized(signature_size, AK::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_DigestSign(ctx.ptr(), signature.data(), &signature_size, message.data(), message.size()));
     return signature.slice(0, signature_size);
 }

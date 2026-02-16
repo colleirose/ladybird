@@ -163,7 +163,7 @@ ErrorOr<SECPxxxr1Signature> SECPxxxr1::sign(ReadonlyBytes hash, UnsignedBigInteg
     size_t sig_len = 0;
     OPENSSL_TRY(EVP_PKEY_sign(ctx.ptr(), nullptr, &sig_len, hash.data(), hash.size()));
 
-    auto sig = TRY(ByteBuffer::create_uninitialized(sig_len));
+    auto sig = TRY(ByteBuffer::create_uninitialized(sig_len, AK::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_sign(ctx.ptr(), sig.data(), &sig_len, hash.data(), hash.size()));
 
     auto const* sig_data = sig.data();

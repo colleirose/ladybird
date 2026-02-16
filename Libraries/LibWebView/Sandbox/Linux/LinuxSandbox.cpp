@@ -12,6 +12,7 @@ namespace WebView::Sandbox {
 
 LinuxSandboxPolicy GetPolicyForProcessType(ProcessType type)
 {
+    // FIX-BEFORE-PR: unsure which of these restrictions work
     switch (type) {
     case ProcessType::Unspecified:
         return {
@@ -29,7 +30,7 @@ LinuxSandboxPolicy GetPolicyForProcessType(ProcessType type)
             .use_bubblewrap = true,
             .allowed_capabilities = {
                 LinuxCapability::Networking,
-                LinuxCapability::FilesystemCacheFiles, // http disk caching
+                LinuxCapability::FilesystemCacheFiles, // disk caching
             }
         }
     }
@@ -37,12 +38,11 @@ LinuxSandboxPolicy GetPolicyForProcessType(ProcessType type)
     case ProcessType::WebWorker:
         return {
             .use_bubblewrap = true,
-            // FIX-BEFORE-PR: most of these can probably be restricted?
             .allowed_capabilities = {
                 // LinuxCapability::Networking,
-                LinuxCapability::FilesystemUserFiles, // FIX-BEFORE-PR: unsure?
+                // LinuxCapability::FilesystemUserFiles,
                 LinuxCapability::FilesystemCacheFiles,
-                LinuxCapability::ProcessManagement, // FIX-BEFORE-PR: unsure?
+                LinuxCapability::ProcessManagement,
             },
         };
     case ProcessType::Browser:

@@ -60,13 +60,13 @@ ErrorOr<void> FixTokenDefaultDaclForWindowObjects(HANDLE token, HWINSTA winsta, 
 
     ScopeGuard guard = [&] {
         if (winsta_sd)
-            Core::Windows::LocalFree(winsta_sd);
+            LocalFree(winsta_sd);
 
         if (desktop_sd)
-            Core::Windows::LocalFree(desktop_sd);
+            LocalFree(desktop_sd);
 
         if (old_token_default)
-            Core::Windows::LocalFree(old_token_default);
+            LocalFree(old_token_default);
     };
 
     // Get information about the window station and desktop
@@ -125,7 +125,7 @@ ErrorOr<void> FixTokenDefaultDaclForWindowObjects(HANDLE token, HWINSTA winsta, 
             &new_default, sizeof(new_default))) {
         // this is the only case where the token will not have ownership of the ACL and therefore we can free it
         // otherwise it must not be freed
-        Core::Windows::LocalFree(new_acl);
+        LocalFree(new_acl);
         return Error::from_windows_error();
     }
 
@@ -144,10 +144,10 @@ ErrorOr<HWINSTA> GetSandboxedWindowStation()
     // uncomment and test once stuff is working
     // ScopeGuard guard = [&] {
     //     if (sec_descriptor_absolute)
-    //         Core::Windows::LocalFree(sec_descriptor_absolute);
+    //         LocalFree(sec_descriptor_absolute);
 
     //     if (sec_descriptor_relative)
-    //         Core::Windows::LocalFree(sec_descriptor_relative);
+    //         LocalFree(sec_descriptor_relative);
     // };
 
     HWINSTA current_win_station = GetProcessWindowStation();
@@ -160,7 +160,7 @@ ErrorOr<HWINSTA> GetSandboxedWindowStation()
         return Error::from_windows_error(result);
     }
 
-    sec_descriptor_absolute = TRY(AbsoluteDescriptorFromRelative(sec_descriptor_relative));
+    sec_descriptor_absolute = TRY(GetAbsoluteDescriptorFromRelative(sec_descriptor_relative));
     SECURITY_ATTRIBUTES sec_attributes = { sizeof(SECURITY_ATTRIBUTES), sec_descriptor_absolute, FALSE };
 
     HWINSTA new_window_station = CreateWindowStation(nullptr, 0, GENERIC_READ | WINSTA_CREATEDESKTOP, &sec_attributes);
@@ -174,7 +174,7 @@ ErrorOr<HWINSTA> GetSandboxedWindowStation()
     return new_window_station;
 }
 
-ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
+ErrorOr<DesktopObject> GetSandboxedAltDesktop(HWINSTA winsta = nullptr)
 {
     if (s_alt_desktop.has_value())
         return *s_alt_desktop;
@@ -182,8 +182,8 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
     // Generate the name, we use it at the end
     auto name_builder = StringBuilder(Mode::UTF16, 64);
     auto id = GetCurrentProcessId();
-    TRY(name_builder.try_append(winsta ? "desktop_alt_" : "desktop_alt_winstation_"));
-    TRY(name_builder.try_append(String::number(id)));
+    name_builder.append(winsta ? "desktop_alt_" : "desktop_alt_winstation_");
+    name_builder.append(Utf16String::number(id)); // FIX-BEFORE-PR: do we need to do .utf16_view() ?
     auto alt_desktop_name = name_builder.to_utf16_string();
 
     // We will use the current desktop privileges as the base for the new desktop privileges
@@ -194,20 +194,15 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
     PACL new_dacl = nullptr;
     PSECURITY_DESCRIPTOR desktop_absolute_descriptor = nullptr;
     PSECURITY_DESCRIPTOR desktop_relative_descriptor = nullptr;
-    bool success = false;
-    ScopeGuard guard = [&] {
-        // these are probably all going to be used and cant be freed if the function succeeds but we can test that later
-        if (success)
-            return;
-
+    ArmedScopeGuard guard = [&] {
         if (desktop_absolute_descriptor)
-            Core::Windows::LocalFree(desktop_absolute_descriptor);
+            free(desktop_absolute_descriptor);
 
         if (desktop_relative_descriptor)
-            Core::Windows::LocalFree(desktop_relative_descriptor);
+            free(desktop_relative_descriptor);
 
         if (new_dacl)
-            Core::Windows::LocalFree(new_dacl);
+            free(new_dacl);
     };
 
     auto get_sec_info_res = GetSecurityInfo(current_desktop, SE_WINDOW_OBJECT, DACL_SECURITY_INFORMATION,
@@ -215,7 +210,7 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
     if (get_sec_info_res != ERROR_SUCCESS)
         return Error::from_windows_error(get_sec_info_res);
 
-    desktop_absolute_descriptor = TRY(Core::Windows::AbsoluteDescriptorFromRelative(desktop_relative_descriptor));
+    desktop_absolute_descriptor = TRY(Core::Windows::GetAbsoluteDescriptorFromRelative(desktop_relative_descriptor));
 
     // If the DACL is NULL, the desktop would currently have no restrictions, but become inaccessible after any changes are applied.
     // Therefore, if it is NULL, we'll first apply a policy that allows access, and then apply the restrictions
@@ -276,7 +271,7 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
     auto name_bytestring = alt_desktop_name.to_byte_string();
     SECURITY_ATTRIBUTES attributes = { sizeof(SECURITY_ATTRIBUTES), desktop_absolute_descriptor, FALSE };
     HDESK desktop = CreateDesktopW(
-        (LPCWSTR)name_bytestring.characters(), NULL, NULL, 0,
+        reinterpret_cast<wchar_t const*> name_bytestring.characters(), NULL, NULL, 0,
         DESKTOP_CREATEWINDOW | DESKTOP_READOBJECTS | READ_CONTROL | WRITE_DAC | WRITE_OWNER,
         &attributes);
 
@@ -301,7 +296,7 @@ ErrorOr<DesktopObject> GetSandboxedAltDesktop([[maybe_unused]] HWINSTA winsta)
     if (desktop == NULL)
         return Error::from_windows_error(desktop_lasterror_value);
 
-    success = true;
+    guard.disarm();
     // FIX-BEFORE-PR: should this have the * or no
     *s_alt_desktop = {
         .alt_desktop = desktop,

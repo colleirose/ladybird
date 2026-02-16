@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <LibCore/SecretString.h>
 #include <LibJS/Forward.h>
 #include <LibWeb/Bindings/PasswordCredentialPrototype.h>
 #include <LibWeb/Bindings/PlatformObject.h>
@@ -27,7 +28,7 @@ public:
 
     virtual ~PasswordCredential() override;
 
-    String const& password() { return m_password; }
+    Core::SecretString const& password() { return m_password; }
     URL::Origin const& origin() { return m_origin; }
 
     String type() override { return "password"_string; }

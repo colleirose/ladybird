@@ -303,7 +303,7 @@ ErrorOr<void> Encoder::write_arbitrary_sized_integer(UnsignedBigInteger const& v
     TRY(write_tag(class_, type, kind));
 
     auto max_byte_size = max(1ull, value.byte_length()); // At minimum, we need one byte to encode 0.
-    ByteBuffer buffer;
+    ByteBuffer buffer = TRY(ByteBuffer::create_uninitialized(max_byte_size, AK::EraseBufferOnFree::Yes));
     auto output = TRY(buffer.get_bytes_for_writing(max_byte_size));
     auto result = value.export_data(output);
     // DER does not allow empty integers, encode a zero if the exported size is zero.

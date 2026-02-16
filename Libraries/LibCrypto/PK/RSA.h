@@ -79,6 +79,7 @@ public:
     }
 
     RSAPrivateKey() = default;
+    ~RSAPrivateKey() = default; // UnsignedBigInteger values will be zeroed on free so we don't ned to worry about doing that here
 
     UnsignedBigInteger const& modulus() const { return m_modulus; }
     UnsignedBigInteger const& private_exponent() const { return m_private_exponent; }

@@ -144,6 +144,14 @@ public:
     ErrorOr<String> replace(StringView needle, StringView replacement, ReplaceMode replace_mode) const;
     ErrorOr<String> reverse() const;
 
+    // Erases whatever data is in the string
+    void String::clear_sensitive()
+    {
+        // FIX-BEFORE-PR: needs testing (kind of feels wrong?) ;  note that same definition is copied to other files so replace it there if needed
+        secure_memzero(reinterpret_cast<void*> raw(), byte_count());
+        this = ""_string;
+    }
+
     ErrorOr<String> trim(Utf8View const& code_points_to_trim, TrimMode mode = TrimMode::Both) const;
     ErrorOr<String> trim(StringView code_points_to_trim, TrimMode mode = TrimMode::Both) const;
     ErrorOr<String> trim_whitespace(TrimMode mode = TrimMode::Both) const;

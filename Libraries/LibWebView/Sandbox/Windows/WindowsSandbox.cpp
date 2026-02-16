@@ -103,8 +103,7 @@ ErrorOr<HANDLE> GetSandboxedPrimaryToken()
     return new_token;
 }
 
-// FIX-BEFORE-PR: move to AppContainer.cpp
-ErrorOr<void> CreateAppContainerAttributesForPolicy(WindowsSandboxPolicy const& policy)
+ErrorOr<LPPROC_THREAD_ATTRIBUTE_LIST> CreateWindowsAttributeListForPolicy(WindowsSandboxPolicy const& policy)
 {
     if (!policy.use_appcontainer)
         return Error::from_string_literal("tried to create AppContainer attributes for a policy that doesn't support AppContainer");
@@ -116,13 +115,10 @@ ErrorOr<void> CreateAppContainerAttributesForPolicy(WindowsSandboxPolicy const& 
     if (!attrs)
         return Error::from_errno(ENOMEM);
 
-    bool success = false;
-    ScopeGuard guard = [&] {
+    ArmedScopeGuard guard = [&] {
         // we can only free attrs if the function was unsuccesful, because on success it is going to be used by the startupinfo
-        if (!success) {
-            DeleteProcThreadAttributeList(attrs);
-            kfree_sized(attrs, attrs_size);
-        }
+        DeleteProcThreadAttributeList(attrs);
+        kfree_sized(attrs, attrs_size);
     };
 
     // initialize the attribute list and add appcontainer
@@ -135,7 +131,7 @@ ErrorOr<void> CreateAppContainerAttributesForPolicy(WindowsSandboxPolicy const& 
     SECURITY_CAPABILITIES caps = {};
     auto internal_caps = appcontainer.internal_windows_capabilities;
     caps.AppContainerSid = appcontainer.sid;
-    // it feels like this might not work
+    // FIX-BEFORE-PR: it feels like this might not work
     caps.Capabilities = (internal_caps.is_empty() ? NULL : internal_caps.data());
     caps.CapabilityCount = static_cast<DWORD>(internal_caps.count());
 
@@ -150,7 +146,7 @@ ErrorOr<void> CreateAppContainerAttributesForPolicy(WindowsSandboxPolicy const& 
         return Error::from_windows_error();
     }
 
-    success = true;
+    guard.disarm();
     return attrs;
 }
 
@@ -178,7 +174,7 @@ WindowsSandboxPolicy GetPolicyForProcessType(ProcessType type)
             .use_appcontainer = true,
             .app_container_capabilities = {
                 // FIX-BEFORE-PR: at least some of these can be restricted correctly?
-                // AppContainerCapability::Networking, 
+                // AppContainerCapability::Networking,
                 // AppContainerCapability::Filesystem,
                 AppContainerCapability::Location,
                 AppContainerCapability::UserCertificates

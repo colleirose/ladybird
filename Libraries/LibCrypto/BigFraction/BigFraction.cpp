@@ -292,7 +292,9 @@ String BigFraction::to_string(unsigned rounding_threshold) const
             builder.append(fractional_value);
     }
 
-    return MUST(builder.to_string());
+    auto res = MUST(builder.to_string());
+    builder.clear_sensitive();
+    return res;
 }
 
 BigFraction BigFraction::sqrt() const

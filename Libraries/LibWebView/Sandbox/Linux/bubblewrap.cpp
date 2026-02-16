@@ -42,7 +42,7 @@ bool IsBubblewrapSupported()
     if (bwrap_support_cache != BwrapCacheValue::NotChecked)
         return bwrap_support_cache == BwrapCacheValue::Supported;
 
-    // FIXME: When the application is running under Flatpak, use `flatpak spawn --sandbox` to create sandboxed child processes
+    // FIXME: When the application is running under Flatpak, use `flatpak-spawn --sandbox` to create sandboxed child processes
     if (IsFlatpak()) {
         dbgln("bubblewrap is unavailable because the program is running under Flatpak. This is not an error and the program will safely continue.");
         bwrap_support_cache = BwrapCacheValue::Unsupported;
@@ -62,10 +62,13 @@ bool IsBubblewrapSupported()
     Vector<ByteString> generated_bwrap_args;
     if (auto args_res = CreateBwrapArguments(process_options); args_res.is_error()) {
         LogGenericSandboxError("generate bubblewrap arguments", args_res.error());
+        if (res.release_error() != Error::from_errno(ENOMEM))
+            bwrap_support_cache = BwrapCacheValue::Unsupported;
+
         return false;
-    } else {
-        generated_bwrap_args = args_res.value();
     }
+
+    generated_bwrap_args = args_res.value();
 
     posix_spawn_file_actions_t spawn_actions;
     if (int ret = posix_spawn_file_actions_init(&spawn_actions); ret != 0) {
@@ -120,6 +123,7 @@ bool IsBubblewrapSupported()
 
 ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[maybe_unused]] int seccomp_memfd)
 {
+    VERIFY(GetPolicyForProcessType(type).use_bubblewrap);
     // this code is partially based on:
     // https://gitlab.gnome.org/GNOME/glycin/-/blob/764672a14c5ac63a94619882ef6e75e0cd916891/glycin/src/sandbox.rs#L285-488
     // https://github.com/containers/bubblewrap/blob/b8e6e1159e63045679ae57b8b379b39eae7798a6/demos/bubblewrap-shell.sh
@@ -172,66 +176,71 @@ ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[ma
     if (seccomp_file_descriptors.contains(type)) {
         seccomp_memfd = seccomp_file_descriptors.find(type);
     } else {
-        bool memfd_success = false;
-        ScopeGuard guard = [&] {
-            if (!memfd_success && seccomp_memfd > 0)
+        seccomp_memfd = TRY(Core::System::anon_create());
+
+        ArmedScopeGuard guard = [&] {
+            if (seccomp_memfd > 0)
                 close(seccomp_memfd);
         };
-        seccomp_memfd = TRY(Core::System::anon_create());
+
         scmp_filter_ctx seccomp_ctx = TRY(GetSeccompCtxForProcessType(type));
         TRY(WriteSeccompCtxToFd(seccomp_ctx, seccomp_memfd));
         TRY(seccomp_file_descriptors.try_set(type, seccomp_memfd));
-        memfd_success = true;
+
+        guard.disarm();
     }
     VERIFY(seccomp_memfd > 0);
 
-    TRY(command.try_append("--seccomp"));
-    TRY(command.try_append(ByteString::number(seccomp_memfd)));
+    command.extend({ "--seccomp", ByteString::number(seccomp_memfd) });
 
     // Append initial options based on process type
     auto policy = GetPolicyForProcessType(type);
 
     if (policy.allowed_capabilities.contains(LinuxCapability::Networking)) {
-        static constexpr auto network_args = {
+        command.extend({
             // this only looks like 2 of the same argument because we are binding the host resolv.conf to the sandbox resolv.conf
             // but it is not an issue
             "--ro-bind",
             "/etc/resolv.conf",
             "/etc/resolv.conf",
             "--share-net",
-        };
-
-        for (size_t i = 0; i < network_args.size(); i++)
-            TRY(command.try_append(network_args[i]));
+        });
     }
 
     // if we have user file permissions then we bind the host home directory to the application
+    // the value of the `home` variable will also be set as the HOME env var down bleow
     ByteString home = "/tmp-home";
     if (policy.allowed_capabilities.contains(LinuxCapability::FilesystemUserFiles)) {
         home = Core::StandardPaths::home_directory();
-        TRY(command.try_append("--bind"));
-        TRY(command.try_append(home)); // same as with /etc/resolv.conf, we are binding ~/ to ~/
-        TRY(command.try_append(home));
+        command.extend({
+            "--bind",
+            home, // same as with /etc/resolv.conf, we are binding ~/ to ~/
+            home,
+        });
     } else {
-        // Create a fake HOME for glib to not throw warnings
-        TRY(command.try_append("--tmpfs"));
-        TRY(command.try_append(home));
+        command.extend({
+            // Create a fake HOME for glib to not throw warnings
+            "--tmpfs",
+            home,
+        })
     }
 
     if (policy.allowed_capabilities.contains(LinuxCapability::FilesystemCacheFiles)) {
         ByteString cache_dir = Core::StandardPaths::cache_directory();
         auto cache_sv = cache_dir.view();
         auto home_sv = home.view();
-        // only bind if it isn't already added as a subdirectory of user files
         if (!policy.allowed_capabilities.contains(LinuxCapability::FilesystemUserFiles) || !cache_sv.starts_with(home_sv)) {
-            TRY(command.try_append("--bind"));
-            TRY(command.try_append(cache_dir));
-            TRY(command.try_append(cache_dir));
+            // only bind if it isn't already added as a subdirectory of user files
+            command.extend({
+                "--bind",
+                cache_dir,
+                cache_dir,
+            });
         }
     }
 
     // Add remaining options
-    static constexpr auto remaining = {
+    command.extend({
         // Create a fake runtime directory for glib to not throw warnings
         "--tmpfs",
         "/tmp-run",
@@ -244,19 +253,12 @@ ErrorOr<Vector<ByteString>> CreateBwrapArguments(WebView::ProcessType type, [[ma
         "--setenv",
         "HOME",
         home,
-        // https://github.com/containers/bubblewrap?tab=readme-ov-file#limitations states:
-        // "If you are not filtering out TIOCSTI commands using seccomp filters, argument --new-session is needed to protect against out-of-sandbox command execution."
-        // TIOCSTI currently isn't filtered out in some filters because they allow unrestricted IOCTL; this will change in the future (see SandboxPolicies.h)
-        "--new-session"
-    };
-
-    for (size_t i = 0; i < remaining.size(); i++)
-        TRY(command.try_append(remaining[i]));
+    });
 
     // Add the original executable and its arguments as the bwrap target
-    TRY(command.try_append(target_options.executable));
+    command.append(target_options.executable);
     for (ByteString arg : target_options.arguments)
-        TRY(command.try_append(arg));
+        command.append(arg);
 
     return command;
 }

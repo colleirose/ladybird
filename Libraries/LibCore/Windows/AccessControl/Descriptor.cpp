@@ -87,7 +87,7 @@ ErrorOr<void> MakeAbsoluteDescriptorDaclNotNull(PSECURITY_DESCRIPTOR descriptor)
     return {};
 }
 
-ErrorOr<PSECURITY_DESCRIPTOR> AbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTOR relative_sd)
+ErrorOr<PSECURITY_DESCRIPTOR> GetAbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTOR relative_sd)
 {
     DWORD sd_size = 0;
     DWORD dacl_size = 0;
@@ -101,7 +101,7 @@ ErrorOr<PSECURITY_DESCRIPTOR> AbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTO
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
         return Error::from_windows_error();
 
-    PSECURITY_DESCRIPTOR absolute_sd_out = (PSECURITY_DESCRIPTOR)kmalloc(sd_size); // FIX-BEFORE-PR: test that it works after LocalAlloc -> kmalloc changes
+    PSECURITY_DESCRIPTOR absolute_sd_out = (PSECURITY_DESCRIPTOR)kmalloc(sd_size);
     PACL dacl = (PACL)kmalloc(dacl_size);
     PACL sacl = (PACL)kmalloc(sacl_size);
     PSID owner = (PSID)kmalloc(owner_size);
@@ -109,12 +109,8 @@ ErrorOr<PSECURITY_DESCRIPTOR> AbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTO
     if (!absolute_sd_out || !dacl || !sacl || !owner || !group)
         return Error::from_errno(ENOMEM);
 
-    bool success = false;
-    ScopeGuard guard = [&] {
+    ArmedScopeGuard guard = [&] {
         // we can only free these if the function failed, otherwise they are going to be owned by the descriptor
-        if (success)
-            return;
-
         kfree_sized(absolute_sd_out, sd_size);
         kfree_sized(dacl, dacl_size);
         kfree_sized(sacl, sacl_size);
@@ -128,7 +124,7 @@ ErrorOr<PSECURITY_DESCRIPTOR> AbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTO
             owner, &owner_size, group, &group_size))
         return Error::from_windows_error();
 
-    success = true;
+    guard.disarm();
     return absolute_sd_out;
 }
 

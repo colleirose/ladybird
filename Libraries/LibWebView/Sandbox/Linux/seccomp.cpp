@@ -61,19 +61,28 @@ static ErrorOr<void> AddAllowRule(scmp_filter_ctx ctx, int syscall_nr, ByteStrin
         return {};
     };
 
-    // FIX-BEFORE-PR: one of these might have incorrect parameters because of the mismatch between args count and whats in SCMP_CMP? im not sure
     if (name == "mmap") {
         // hugetlb is generally useless in a browser and has had security issues in the past
         // https://github.com/mozilla-firefox/firefox/blob/e378f44562245e675730580d935069112efe6864/security/sandbox/linux/SandboxFilter.cpp#L1147-L1170
         constexpr int forbid = MAP_HUGETLB | (MAP_HUGE_MASK << MAP_HUGE_SHIFT);
-        TRY(add_restrictions_and_otherwise_allow(ENOSYS, 1, SCMP_CMP(3, SCMP_CMP_MASKED_EQ, forbid, forbid)));
+
+        // FIX-BEFORE-PR: wrong args?
+        TRY(add_restrictions_and_otherwise_allow(ENOSYS, 1, SCMP_CMP(1, SCMP_CMP_MASKED_EQ, forbid, forbid)));
         return {};
     }
 
     if (name == "memfd_create") {
         // See above
         constexpr int forbid = MFD_HUGETLB | (MFD_HUGE_MASK << MFD_HUGE_SHIFT);
+
         TRY(add_restrictions_and_otherwise_allow(ENOSYS, 1, SCMP_CMP(1, SCMP_CMP_MASKED_EQ, forbid, forbid)));
+        return {};
+    }
+
+    if (name == "ioctl") {
+        // see, e.g., https://github.com/flatpak/flatpak/blob/b37f739721e219159cad4791a894ae4e7f1daa2a/common/flatpak-run.c#L1954-L1959
+        TRY(add_restrictions_and_otherwise_allow(EPERM, 1, SCMP_CMP(1, SCMP_CMP_MASKED_EQ, 0xFFFFFFFFu, (int)TIOCSTI)));
+        TRY(add_restrictions_and_otherwise_allow(EPERM, 1, SCMP_CMP(1, SCMP_CMP_MASKED_EQ, 0xFFFFFFFFu, (int)TIOCLINUX)));
         return {};
     }
 
@@ -85,25 +94,20 @@ static ErrorOr<void> AddAllowRule(scmp_filter_ctx ctx, int syscall_nr, ByteStrin
     return {};
 }
 
-static ErrorOr<Vector<ByteString>> GetAllowedSyscallsForPolicy(LinuxSandboxPolicy policy)
+static Vector<ByteString> GetAllowedSyscallsForPolicy(LinuxSandboxPolicy policy)
 {
     Vector<ByteString> allowed = always_allowed_syscalls;
 
-    if (policy.allowed_capabilities.contains(LinuxCapability::Networking)) {
-        for (auto const name : SyscallNameLists::networking)
-            TRY(allowed.try_append(name));
-    }
+    if (policy.allowed_capabilities.contains(LinuxCapability::Networking))
+        allowed.extend(SyscallNameLists::networking);
 
-    // bubblewrap will provide particular restrictions based on the file location
     if (policy.allowed_capabilities.contains(LinuxCapability::FilesystemUserFiles) || policy.allowed_capabilities.contains(LinuxCapability::FilesystemCacheFiles)) {
-        for (auto const name : SyscallNameLists::filesystem)
-            TRY(allowed.try_append(name));
+        // bubblewrap will provide particular restrictions based on the file location
+        allowed.extend(SyscallNameLists::filesystem);
     }
 
-    if (policy.allowed_capabilities.contains(LinuxCapability::ProcessManagement)) {
-        for (auto const name : SyscallNameLists::process_management)
-            TRY(allowed.try_append(name));
-    }
+    if (policy.allowed_capabilities.contains(LinuxCapability::ProcessManagement))
+        allowed.extend(SyscallNameLists::process_management);
 
     return allowed;
 }
@@ -120,7 +124,7 @@ ErrorOr<scmp_filter_ctx> GetSeccompCtxForProcessType(ProcessType type)
         return Error::from_string_literal("Failed to initialize seccomp context, the system is likely out of memory.");
 
     auto policy = GetPolicyForProcessType(type);
-    auto allowed_syscalls = TRY(GetAllowedSyscallsForPolicy(policy));
+    auto allowed_syscalls = GetAllowedSyscallsForPolicy(policy);
 
     // Add allowed syscalls
     for (ByteString const name : allowed_syscalls) {
@@ -134,7 +138,7 @@ ErrorOr<scmp_filter_ctx> GetSeccompCtxForProcessType(ProcessType type)
         TRY(AddAllowRule(ctx, syscall_nr, name));
     }
 
-    // Change the errno for denied syscalls where EPERM isn't valid
+    // Change the errno for denied syscalls where EPERM isn't a vaild response or isn't desired
     for (ByteString const name : errno_override_if_denied) {
         if (!allowed_syscalls.contains(name)) {
             int syscall_nr = seccomp_syscall_resolve_name(name.characters());
@@ -144,6 +148,19 @@ ErrorOr<scmp_filter_ctx> GetSeccompCtxForProcessType(ProcessType type)
 
             auto errno_val = errno_override_if_denied.find(name);
             TRY(AddDenyRule(ctx, syscall_nr, errno_val));
+        }
+    }
+
+    if (!(policy.allowed_capabilities.contains(LinuxCapability::FilesystemUserFiles) || policy.allowed_capabilities.contains(LinuxCapability::FilesystemCacheFiles))) {
+        // Prefer errors of the file not existing when filesystem perms are denied if that's not overriden for the syscall
+        for (ByteString const name : SyscallNameLists::filesystem) {
+            if (!errno_override_if_denied.includes(name)) {
+                int syscall_nr = seccomp_syscall_resolve_name(name.characters());
+                if (syscall_nr == __NR_SCMP_ERROR)
+                    continue;
+
+                TRY(AddDenyRule(ctx, syscall_nr, ENOENT));
+            }
         }
     }
 

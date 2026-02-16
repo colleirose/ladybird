@@ -37,7 +37,7 @@ ErrorOr<ByteBuffer> ChaCha20Poly1305::encrypt(ReadonlyBytes key, ReadonlyBytes n
         OPENSSL_TRY(EVP_EncryptUpdate(ctx.ptr(), nullptr, &aad_len, aad.data(), aad.size()));
     }
 
-    auto ciphertext = TRY(ByteBuffer::create_uninitialized(plaintext.size()));
+    auto ciphertext = TRY(ByteBuffer::create_uninitialized(plaintext.size(), AK::EraseBufferOnFree::Yes));
     int out_len = 0;
 
     OPENSSL_TRY(EVP_EncryptUpdate(ctx.ptr(), ciphertext.data(), &out_len, plaintext.data(), plaintext.size()));
@@ -48,10 +48,11 @@ ErrorOr<ByteBuffer> ChaCha20Poly1305::encrypt(ReadonlyBytes key, ReadonlyBytes n
     auto tag = TRY(ByteBuffer::create_uninitialized(tag_size));
     OPENSSL_TRY(EVP_CIPHER_CTX_ctrl(ctx.ptr(), EVP_CTRL_AEAD_GET_TAG, tag_size, tag.data()));
 
-    auto result = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + tag_size));
+    auto result = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + tag_size, AK::EraseBufferOnFree::Yes));
     result.overwrite(0, ciphertext.data(), ciphertext.size());
     result.overwrite(ciphertext.size(), tag.data(), tag.size());
 
+    secure_memzero(ciphertext.data(), ciphertext.size());
     return result;
 }
 
@@ -85,16 +86,16 @@ ErrorOr<ByteBuffer> ChaCha20Poly1305::decrypt(ReadonlyBytes key, ReadonlyBytes n
         OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), nullptr, &aad_len, aad.data(), aad.size()));
     }
 
-    auto plaintext = TRY(ByteBuffer::create_uninitialized(ciphertext.size()));
+    auto plaintext = TRY(ByteBuffer::create_uninitialized(ciphertext.size(), AK::EraseBufferOnFree::Yes));
     int out_len = 0;
-
     OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), plaintext.data(), &out_len, ciphertext.data(), ciphertext.size()));
+    secure_memzero(ciphertext.data(), ciphertext.size());
 
     int final_len = 0;
     OPENSSL_TRY(EVP_DecryptFinal_ex(ctx.ptr(), plaintext.data() + out_len, &final_len));
 
-    secure_memzero(ciphertext.data(), ciphertext_size);
-    return plaintext.slice(0, out_len + final_len);
+    auto res = TRY(plaintext.slice(0, out_len + final_len));
+    return res;
 }
 
 }

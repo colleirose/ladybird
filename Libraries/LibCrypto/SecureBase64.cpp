@@ -29,7 +29,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-// This is a constant-time implementation of Base64.
+// This is an implementation of Base64 intended for secret data. It performs encoding/decoding in constant time, and erased unneded copies of the secret data.
 // Encoding/decoding operations can leak secret data. See: https://arxiv.org/abs/2108.04600
 // It's fairly unlikely that the circumstances to make this exploitable this would occur in a web browser,
 // but we will use this when encoding/decoding secret information.
@@ -38,7 +38,7 @@ SOFTWARE.
 // There are still branching conditions used here, but they are based on padding/formatting, not sensitive data, so it should be safe.
 // The same type of conditions are used in BoringSSL, aws-lc, libsodium, and the ConstTimeEncoding repository that was referenced earlier.
 
-#include "ConstantTimeBase64.h"
+#include "SecureBase64.h"
 
 #include <AK/Array.h>
 #include <AK/Base64.h>
@@ -48,8 +48,6 @@ SOFTWARE.
 #include <AK/StringBuilder.h>
 #include <AK/StringView.h>
 #include <AK/Types.h>
-
-namespace Crypto {
 
 // ALL decoding tables must be 256 bytes.
 // Each contains 8-bit -> 6-bit value OR 0xFF (invalid)
@@ -73,20 +71,22 @@ static ALWAYS_INLINE bool is_invalid(u8 x)
     return x == 0xFF;
 }
 
+namespace Crypto {
+
 // Exported functions at the bottom
 
 // FIX-BEFORE-PR: probably types wrong
 static ErrorOr<String> encode_impl(ReadonlyBytes input, char const* alphabet, AK::OmitPadding omit_padding)
 {
-    StringBuilder out = StringBuilder(((input.size() + 2) / 3) * 4);
+    StringBuilder builder = StringBuilder(((input.size() + 2) / 3) * 4);
 
     size_t i = 0;
     while (i + 3 <= input.size()) {
         u32 v = (input[i] << 16) | (input[i + 1] << 8) | input[i + 2];
-        TRY(out.try_append(alphabet[(v >> 18) & 0x3F]));
-        TRY(out.try_append(alphabet[(v >> 12) & 0x3F]));
-        TRY(out.try_append(alphabet[(v >> 6) & 0x3F]));
-        TRY(out.try_append(alphabet[v & 0x3F]));
+        TRY(builder.try_append(alphabet[(v >> 18) & 0x3F]));
+        TRY(builder.try_append(alphabet[(v >> 12) & 0x3F]));
+        TRY(builder.try_append(alphabet[(v >> 6) & 0x3F]));
+        TRY(builder.try_append(alphabet[v & 0x3F]));
         i += 3;
     }
 
@@ -95,23 +95,25 @@ static ErrorOr<String> encode_impl(ReadonlyBytes input, char const* alphabet, AK
     if (omit_padding == AK::OmitPadding::No) {
         if (rem == 1) {
             u32 v = (input[i] << 16);
-            TRY(out.try_append(alphabet[(v >> 18) & 0x3F]));
-            TRY(out.try_append(alphabet[(v >> 12) & 0x3F]));
-            TRY(out.try_append('='));
-            TRY(out.try_append('='));
+            TRY(builder.try_append(alphabet[(v >> 18) & 0x3F]));
+            TRY(builder.try_append(alphabet[(v >> 12) & 0x3F]));
+            TRY(builder.try_append('='));
+            TRY(builder.try_append('='));
         } else if (rem == 2) {
             u32 v = (input[i] << 16) | (input[i + 1] << 8);
-            TRY(out.try_append(alphabet[(v >> 18) & 0x3F]));
-            TRY(out.try_append(alphabet[(v >> 12) & 0x3F]));
-            TRY(out.try_append(alphabet[(v >> 6) & 0x3F]));
-            TRY(out.try_append('='));
+            TRY(builder.try_append(alphabet[(v >> 18) & 0x3F]));
+            TRY(builder.try_append(alphabet[(v >> 12) & 0x3F]));
+            TRY(builder.try_append(alphabet[(v >> 6) & 0x3F]));
+            TRY(builder.try_append('='));
         }
     }
 
-    return out.to_string();
+    auto out = builder.to_string();
+    builder.clear_sensitive();
+    return out;
 }
 
-static ErrorOr<size_t, AK::InvalidBase64> decode_into_impl(StringView input, ByteBuffer& output, Array<u8, 256> const& table)
+static ErrorOr<size_t, AK::InvalidBase64> decode_into_impl(StringView input, ByteBuffer& out, Array<u8, 256> const& table)
 {
     size_t n = input.length();
 
@@ -148,6 +150,13 @@ static ErrorOr<size_t, AK::InvalidBase64> decode_into_impl(StringView input, Byt
         u8 c = table[(u8)input[i + 2]];
         u8 d = table[(u8)input[i + 3]];
 
+        ScopeGuard guard = [&] {
+            secure_memzero(a, sizeof(a));
+            secure_memzero(b, sizeof(b));
+            secure_memzero(c, sizeof(c));
+            secure_memzero(d, sizeof(d));
+        };
+
         // invalid chars (except padding) are errors
         if (is_invalid(a)) [[unlikely]] {
             return AK::InvalidBase64 {
@@ -163,7 +172,7 @@ static ErrorOr<size_t, AK::InvalidBase64> decode_into_impl(StringView input, Byt
             };
         }
 
-        // For c + d we allow '=', but only in legal places
+        // For c + d, we allow '=', but only in legal places
         bool c_pad = (input[i + 2] == '=');
         bool d_pad = (input[i + 3] == '=');
 
@@ -193,17 +202,14 @@ static ErrorOr<size_t, AK::InvalidBase64> decode_into_impl(StringView input, Byt
             byte_count = 3;
         }
 
-        secure_memzero(a, sizeof(a));
-        secure_memzero(b, sizeof(b));
-        secure_memzero(c, sizeof(c));
-        secure_memzero(d, sizeof(d));
-
         if (byte_count >= 1)
             out[out_index++] = (v >> 16) & 0xFF;
         if (byte_count >= 2)
             out[out_index++] = (v >> 8) & 0xFF;
         if (byte_count >= 3)
             out[out_index++] = v & 0xFF;
+
+        secure_memzero(v, sizeof(v));
     }
 
     return out_index;
@@ -211,14 +217,16 @@ static ErrorOr<size_t, AK::InvalidBase64> decode_into_impl(StringView input, Byt
 
 static ErrorOr<ByteBuffer, AK::InvalidBase64> decode_impl(StringView input, Array<u8, 256> table)
 {
-    ByteBuffer output;
+    ErrorOr<ByteBuffer> maybe_output = ByteBuffer::create_uninitialized(AK::size_required_to_decode_base64(input), AK::EraseBufferOnFree::Yes);
 
-    if (output.try_resize(AK::size_required_to_decode_base64(input)).is_error()) [[unlikely]] {
+    if (maybe_output.is_error()) [[unlikely]] {
         return AK::InvalidBase64 {
             .error = Error::from_errno(ENOMEM),
             .valid_input_bytes = 0,
         };
     }
+
+    auto output = maybe_output.release_value();
 
     TRY(decode_into_impl(input, output, table));
 

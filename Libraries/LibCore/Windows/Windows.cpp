@@ -21,13 +21,13 @@ ErrorOr<HANDLE> CreateLowPrivilegedAnonFileMap(size_t max_size_high, size_t max_
         PAGE_READWRITE,
         (DWORD)max_size_high,
         (DWORD)max_size_low,
-        name ? (LPCWSTR)name.characters() : NULL);
+        name ? reinterpret_cast<wchar_t const*> name.characters() : NULL);
 
     if (!source_handle)
         return Error::from_windows_error();
 
-    HANDLE new_handle;
     HANDLE process = GetCurrentProcess();
+    HANDLE new_handle;
     if (!DuplicateHandle(
             process,
             source_handle,

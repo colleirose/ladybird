@@ -17,6 +17,6 @@ namespace Core::Windows {
 ErrorOr<void> MakeAbsoluteDescriptorDaclNotNull(PSECURITY_DESCRIPTOR descriptor);
 
 // Obtain an absolute security descriptor from a relative security descriptor
-ErrorOr<PSECURITY_DESCRIPTOR> AbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTOR relative_sd);
+ErrorOr<PSECURITY_DESCRIPTOR> GetAbsoluteDescriptorFromRelative(PSECURITY_DESCRIPTOR relative_sd);
 
 }

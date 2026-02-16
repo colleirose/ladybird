@@ -18,6 +18,12 @@
 namespace AK {
 namespace Detail {
 
+enum class EraseBufferOnFree {
+    Unspecified,
+    Yes,
+    No,
+};
+
 template<size_t inline_capacity>
 class ByteBuffer {
 public:
@@ -28,23 +34,52 @@ public:
         clear();
     }
 
-    ByteBuffer(ByteBuffer const& other)
+    // FIX-BEFORE-PR: does the way i am doing zero-on-free really work
+
+    ByteBuffer(EraseBufferOnFree erase_option)
     {
+        auto buffer = ByteBuffer();
+        if (erase_option == EraseBufferOnFree::Yes)
+            buffer.m_zero_on_free = true;
+        move_from(move(buffer));
+    }
+
+    ByteBuffer(ByteBuffer const& other, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
+    {
+        if (erase_option == EraseBufferOnFree::Unspecified) {
+            m_zero_on_free = other.m_zero_on_free;
+        } else if (erase_option == EraseBufferOnFree::Yes) {
+            m_zero_on_free = true;
+        }
+
         MUST(try_resize(other.size()));
         VERIFY(m_size == other.size());
         __builtin_memcpy(data(), other.data(), other.size());
     }
 
-    ByteBuffer(ByteBuffer&& other)
+    ByteBuffer(ByteBuffer&& other, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
+        if (erase_option == EraseBufferOnFree::Yes)
+            other.m_zero_on_free = true; // this will also apply to the new buffer because move_from() will apply it
+
         move_from(move(other));
     }
 
     ByteBuffer& operator=(ByteBuffer&& other)
     {
         if (this != &other) {
-            if (!m_inline)
+            if (other.m_zero_on_free)
+                m_zero_on_free = true;
+
+            if (m_inline) {
+                if (m_zero_on_free)
+                    secure_memzero(m_inline_buffer, inline_capacity);
+            } else {
+                if (m_zero_on_free)
+                    secure_memzero(m_outline_buffer, m_outline_capacity);
                 kfree_sized(m_outline_buffer, m_outline_capacity);
+            }
+
             move_from(move(other));
         }
         return *this;
@@ -53,53 +88,62 @@ public:
     ByteBuffer& operator=(ByteBuffer const& other)
     {
         if (this != &other) {
+            if (other.m_zero_on_free)
+                m_zero_on_free = true;
+
             if (m_size > other.size()) {
                 trim(other.size(), true);
             } else {
                 MUST(try_resize(other.size()));
             }
+
             __builtin_memcpy(data(), other.data(), other.size());
         }
         return *this;
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> create_uninitialized(size_t size)
+    [[nodiscard]] static ErrorOr<ByteBuffer> create_uninitialized(size_t size, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
         auto buffer = ByteBuffer();
         TRY(buffer.try_resize(size));
+        if (erase_option == EraseBufferOnFree::Yes)
+            buffer.m_zero_on_free = true;
         return { move(buffer) };
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> create_zeroed(size_t size)
+    [[nodiscard]] static ErrorOr<ByteBuffer> create_zeroed(size_t size, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
         auto buffer = TRY(create_uninitialized(size));
 
         buffer.zero_fill();
         VERIFY(size == 0 || (buffer[0] == 0 && buffer[size - 1] == 0));
+        if (erase_option == EraseBufferOnFree::Yes)
+            buffer.m_zero_on_free = true;
         return { move(buffer) };
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> copy(void const* data, size_t size)
+    [[nodiscard]] static ErrorOr<ByteBuffer> copy(void const* data, size_t size, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
-        auto buffer = TRY(create_uninitialized(size));
+        auto buffer = TRY(create_uninitialized(size, zero, erase_option));
         if (buffer.m_inline && size > inline_capacity)
             VERIFY_NOT_REACHED();
         if (size != 0)
             __builtin_memcpy(buffer.data(), data, size);
+
         return { move(buffer) };
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> copy(ReadonlyBytes bytes)
+    [[nodiscard]] static ErrorOr<ByteBuffer> copy(ReadonlyBytes bytes, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
-        return copy(bytes.data(), bytes.size());
+        return copy(bytes.data(), bytes.size(), erase_option);
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> xor_buffers(ReadonlyBytes first, ReadonlyBytes second)
+    [[nodiscard]] static ErrorOr<ByteBuffer> xor_buffers(ReadonlyBytes first, ReadonlyBytes second, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
         if (first.size() != second.size())
             return Error::from_errno(EINVAL);
 
-        auto buffer = TRY(create_uninitialized(first.size()));
+        auto buffer = TRY(create_uninitialized(first.size(), erase_option));
         auto buffer_data = buffer.data();
         auto first_data = first.data();
         auto second_data = second.data();
@@ -171,18 +215,21 @@ public:
         // I cannot hand you a slice I don't have
         VERIFY(offset + size <= this->size());
 
-        return copy(offset_pointer(offset), size);
+        return copy(offset_pointer(offset), size, m_zero_on_free ? EraseBufferOnFree::Yes : EraseBufferOnFree::Unspecified);
     }
 
     void clear()
     {
-        // FIX-BEFORE-PR: does this work correctly
         if (m_inline) {
-            secure_memzero(data(), capacity());
+            if (m_zero_on_free)
+                secure_memzero(m_inline_buffer, inline_capacity)
         } else {
-            kfree_sized(data(), capacity());
+            if (m_zero_on_free)
+                secure_memzero(m_outline_buffer, m_outline_capacity);
+            kfree_sized(m_outline_buffer, m_outline_capacity);
             m_inline = true;
         }
+
         m_size = 0;
     }
 
@@ -342,6 +389,7 @@ private:
     {
         m_size = other.m_size;
         m_inline = other.m_inline;
+        m_zero_on_free = other.m_zero_on_free;
         if (!other.m_inline) {
             m_outline_buffer = other.m_outline_buffer;
             m_outline_capacity = other.m_outline_capacity;
@@ -349,6 +397,7 @@ private:
             VERIFY(other.m_size <= inline_capacity);
             __builtin_memcpy(m_inline_buffer, other.m_inline_buffer, other.m_size);
         }
+
         other.m_size = 0;
         other.m_inline = true;
     }
@@ -360,6 +409,9 @@ private:
         auto outline_capacity = m_outline_capacity;
         if (!may_discard_existing_data)
             __builtin_memcpy(m_inline_buffer, outline_buffer, size);
+
+        if (m_zero_on_free)
+            secure_memzero(outline_buffer, outline_capacity);
         kfree_sized(outline_buffer, outline_capacity);
         m_inline = true;
     }
@@ -381,6 +433,8 @@ private:
             __builtin_memcpy(new_buffer, data(), m_size);
         } else if (m_outline_buffer) {
             __builtin_memcpy(new_buffer, m_outline_buffer, min(new_capacity, m_outline_capacity));
+            if (m_zero_on_free)
+                secure_memzero(m_outline_buffer, m_outline_capacity);
             kfree_sized(m_outline_buffer, m_outline_capacity);
         }
 
@@ -399,7 +453,8 @@ private:
     };
     size_t m_size { 0 };
     bool m_inline { true };
-};
+    bool m_zero_on_free { false };
+}
 
 }
 

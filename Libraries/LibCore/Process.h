@@ -47,8 +47,8 @@ enum WindowsStartupOptionsType {
 }
 
 struct ProcessWindowsOptions {
-    WindowsStartupOptionsType startup_options_type { WindowsStartupOptionsType::Unspecified };
-    Variant<HANDLE, LPPROC_THREAD_ATTRIBUTE_LIST> startup_options_value { NULL };
+    WindowsStartupOptionsType startup_type { WindowsStartupOptionsType::Unspecified };
+    Variant<HANDLE, LPPROC_THREAD_ATTRIBUTE_LIST> startup_val { NULL };
     Utf16String alt_desktop_name { "" };
 }
 #endif

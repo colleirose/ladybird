@@ -13,7 +13,16 @@
 #include <LibCrypto/BigInt/SignedBigInteger.h>
 #include <LibCrypto/BigInt/Tommath.h>
 
+// FIX-BEFORE-PR (both signed and unsigned bigint): secure_memzero may be incorrect, redo testing and stuff soon
+
 namespace Crypto {
+
+static ALWAYS_INLINE void erase_and_clear(mp_int* ptr)
+{
+    if (ptr->alloc > 0)
+        secure_memzero(ptr->dp, ptr->alloc);
+    mp_clear(ptr);
+}
 
 SignedBigInteger::SignedBigInteger(UnsignedBigInteger&& unsigned_data, bool sign)
 {
@@ -65,7 +74,7 @@ SignedBigInteger& SignedBigInteger::operator=(SignedBigInteger const& other)
     if (this == &other)
         return *this;
 
-    mp_clear(&m_mp);
+    erase_and_clear(&m_mp);
     MP_MUST(mp_init_copy(&m_mp, &other.m_mp));
     m_hash = other.m_hash;
 
@@ -77,10 +86,11 @@ SignedBigInteger& SignedBigInteger::operator=(SignedBigInteger&& other)
     if (this == &other)
         return *this;
 
-    mp_clear(&m_mp);
+    erase_and_clear(&m_mp);
     m_mp = other.m_mp;
     m_hash = other.m_hash;
 
+    erase_and_clear(&other.m_mp);
     other.m_mp = {};
     other.m_hash.clear();
 
@@ -94,11 +104,8 @@ SignedBigInteger::SignedBigInteger()
 
 SignedBigInteger::~SignedBigInteger()
 {
-    // FIX-BEFORE-PR: May be incorrect, redo testing and stuff soon
-    // do note that m_mp.alloc contains how much is actually allocated, but we only need to erase what is actually used
     VERIFY(m_mp.size <= m_mp.alloc);
-    secure_memzero(m_mp.dp, m_mp.size);
-    mp_clear(&m_mp);
+    erase_and_clear(&m_mp);
 }
 
 Bytes SignedBigInteger::export_data(Bytes data) const
@@ -110,12 +117,12 @@ Bytes SignedBigInteger::export_data(Bytes data) const
 
 ErrorOr<SignedBigInteger> SignedBigInteger::from_base(u16 N, StringView str)
 {
-    // FIXME: SignedBigInteger and UnsignedBigInteger to/from base64 functions should be constant-time
+    // FIXME: SignedBigInteger and UnsignedBigInteger to/from baseN functions should be constant-time
     VERIFY(N <= 36);
     if (str.is_empty())
         return SignedBigInteger(0);
 
-    auto buffer = TRY(ByteBuffer::create_zeroed(str.length() + 1));
+    auto buffer = TRY(ByteBuffer::create_zeroed(str.length() + 1, AK::EraseBufferOnFree::Yes));
 
     size_t idx = 0;
     for (auto& c : str) {
@@ -141,7 +148,7 @@ ErrorOr<String> SignedBigInteger::to_base(u16 N) const
 
     int size = 0;
     MP_MUST(mp_radix_size(&m_mp, N, &size));
-    auto buffer = TRY(ByteBuffer::create_zeroed(size));
+    auto buffer = TRY(ByteBuffer::create_zeroed(size, AK::EraseBufferOnFree::Yes));
 
     size_t written = 0;
     MP_MUST(mp_to_radix(&m_mp, reinterpret_cast<char*>(buffer.data()), size, &written, N));
@@ -371,7 +378,7 @@ FLATTEN SignedBigInteger SignedBigInteger::negated_value() const
 u32 SignedBigInteger::hash() const
 {
     return m_hash.ensure([&] {
-        auto buffer = MUST(ByteBuffer::create_zeroed(byte_length()));
+        auto buffer = MUST(ByteBuffer::create_zeroed(byte_length(), AK::EraseBufferOnFree::Yes));
         auto result = export_data(buffer);
         return string_hash(reinterpret_cast<char const*>(result.data()), result.size());
     });

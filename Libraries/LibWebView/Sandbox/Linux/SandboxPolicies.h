@@ -24,20 +24,43 @@ struct LinuxSandboxPolicy {
     Vector<LinuxCapability> allowed_capabilities;
 };
 
+// Override errno for syscalls where the default errno is invalid or undesired (default is ENOENT for filesystem and EPERM for everything else)
 static HashMap<ByteString, int> errno_override_if_denied = {
+    // see https://github.com/flatpak/flatpak/blob/b37f739721e219159cad4791a894ae4e7f1daa2a/common/flatpak-run.c#L1961-L1965
+    // clone3() shouldn't be allowed, returning ENOSYS should usually encourage the caller to use clone() instead if it's allowed
+    { "clone3", ENOSYS },
+
     // Filesystem
-    // Prefer errors of the file not existing because that's the most likely to be handled correctly
-    { "uselib", ENOENT },
     { "ustat", EINVAL },
-    { "stat", ENOENT },
-    { "newfstatat", ENOENT },
-    { "fstatat64", ENOENT },
-    { "statfs", ENOENT },
-    { "access", ENOENT },
-    { "lstat", ENOENT },
-    { "readlink", ENOENT },
-    { "faccessat", ENOENT },
-    { "faccessat2", ENOENT },
+
+    // Proces management
+    // EPERM is invalid for a lot of process management and we'd prefer ENOMEM where EPERM is invalid
+    // but there's too much variation in where ENOMEM is allowed so we'll just manually list each EPERM override instead of changing the process management default
+    { "pthread_atfork", ENOMEM },
+
+    { "posix_spawn_file_actions_init", ENOMEM },
+    { "posix_spawn_file_actions_destroy", EINVAL },
+    { "posix_spawn_file_actions_addopen", ENOMEM },
+    { "posix_spawn_file_actions_addclose", ENOMEM },
+    { "posix_spawn_file_actions_adddup2", ENOMEM },
+
+    { "posix_spawnattr_init", ENOMEM },
+    { "posix_spawnattr_destroy", ENOMEM },
+
+    { "posix_spawnattr_setflags", EINVAL },
+    { "posix_spawnattr_getflags", EINVAL },
+
+    { "posix_spawnattr_setpgroup", EINVAL },
+    { "posix_spawnattr_getpgroup", EINVAL },
+
+    { "posix_spawnattr_setsigdefault", EINVAL },
+    { "posix_spawnattr_getsigdefault", EINVAL },
+
+    { "posix_spawnattr_setsigmask", EINVAL },
+    { "posix_spawnattr_getsigmask", EINVAL },
+
+    { "posix_spawnattr_setflags", EINVAL },
+    { "posix_spawnattr_getflags", EINVAL },
 };
 
 static constexpr auto always_allowed_syscalls = {
@@ -50,9 +73,8 @@ static constexpr auto always_allowed_syscalls = {
     "getcwd", // Maybe this could be restricted?
 
     // Simple process management that isn't restricted, like closing or restarting the process
-    "restart",
+    "restart", "atexit", "exit", "exit_group",
     "futex", // FIXME: Futex should be more restrictive, see https://bugzilla.mozilla.org/show_bug.cgi?id=1441993 and https://github.com/chromium/chromium/blob/f2d2cad7697c941615847ae503eb9b3b64773cce/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc#L361-L383
-    "exit", "exit_group",
 
     // Epoll
     "epoll_create", "epoll_wait", "epoll_pwait", "epoll_create1", "epoll_ctl",
@@ -66,8 +88,7 @@ static constexpr auto always_allowed_syscalls = {
 
     // Memory management
     "madvise", "mmap", "munmap", "mremap", "mlock", "munlock", "mlockall", "munlockall", "mprotect", "pkey_alloc", "pkey_mprotect", "mseal", "munseal", "msync", "fsync", "membarrier",
-    "brk",          // not called by us directly but may be invoked by a system allocator like glibc
-    "memfd_create", // FIXME: Currently memfd_create is assumed to be available in most of the process, however we may be able to make this more restrictive
+    "brk", // not called by us directly but may be invoked by a system allocator like glibc
 
     // Used by IPC and also for networking.
     // FIXME: Almost all of these can be made more restrictive.
@@ -76,45 +97,64 @@ static constexpr auto always_allowed_syscalls = {
 
     // Misc things
     "mincore", // see https://bugzilla.mozilla.org/show_bug.cgi?id=1462640. FIX-BEFORE-PR: Might not be needed here but needs more testing.
-    "ioctl",   // FIX-BEFORE-PR: actually restrict ioctl more
+    "ioctl",   // Has some restrictions set in AddAllowRule(), might be able to be restricted further.
     "fcntl",   // Used for IPC, maybe this could be more restricted?
                // FIX-BEFORE-PR: Some of the IPC stuff I should figure out during testing because I don't think all processes use the same IPC calls
 };
 
 class SyscallNameLists {
     static constexpr auto networking = {
-        // FIXME: These are *very* permissive and should be restricted much more than they are now,
-        // according to Chromium and Firefox code comments it is "impossible" to effectively sandbox getaddrinfo
+        // FIX-BEFORE-PR: reworking networking as much as possible (2nd comment below isnt even accurate yet)
+
+        // FIXME: These are very permissive and should be restricted much more than they are now.
+        // We apply some restrictions in seccomp.cpp, but we should probably do more soon.
+        // Note that according to Chromium and Firefox code comments it is "impossible" to effectively sandbox getaddrinfo
         // and some of the other syscalls listed here. However, a lot of work has to be done to further restrict this.
         "getaddrinfo", // FIX-BEFORE-PR: apparently x11 uses getaddrinfo locally
         "socketcall",  // FIX-BEFORE-PR: unsure if even used for anything
     };
 
     static constexpr auto process_management = {
-        "fork",
-        "clone",
         "kcmp",
         "unshare",
-        "pthread_atfork",
+
         "set_robust_list",
         "get_robust_list",
+
+        // spawn a process
         "posix_spawn",
-        "posix_spawnattr_init",
-        "posix_spawnattr_setflags",
-        "posix_spawnattr_setpgroup",
-        "posix_spawnattr_setsigdefault",
-        "posix_spawnattr_setsigmask",
-        "posix_spawnattr_destroy",
-        "posix_spawnattr_getflags",
-        "posix_spawnattr_getpgroup",
+        "pthread_atfork",
+        "fork",
+        "clone",
+
+        // file_actions
         "posix_spawn_file_actions_init",
-        "posix_spawn_file_actions_addclose",
-        "posix_spawn_file_actions_adddup",
-        "posix_spawn_file_actions_adddup2",
-        "posix_spawn_file_actions_addopen",
         "posix_spawn_file_actions_destroy",
+        "posix_spawn_file_actions_addopen",
+        "posix_spawn_file_actions_addclose",
+        "posix_spawn_file_actions_adddup2",
+
+        // spawnattr
+        "posix_spawnattr_init",
+        "posix_spawnattr_destroy",
+
+        "posix_spawnattr_setflags",
+        "posix_spawnattr_getflags",
+
+        "posix_spawnattr_setpgroup",
+        "posix_spawnattr_getpgroup",
+
+        "posix_spawnattr_setsigdefault",
+        "posix_spawnattr_getsigdefault",
+
+        "posix_spawnattr_setsigmask",
+        "posix_spawnattr_getsigmask",
+
+        "posix_spawnattr_getflags",
     };
 
+    // Based on https://github.com/chromium/chromium/blob/16d6196943529ac4379678dbd75add87110273e6/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc#L104-L195
+    // Removed everything we don't use
     static constexpr auto filesystem = {
     // FIX-BEFORE-PR: some of these are clearly unused
 #if !ARCH(AARCH64)
@@ -138,9 +178,6 @@ class SyscallNameLists {
         "stat",
         "symlink",
         "unlink",
-#    if defined(AK_ARCH_64_BIT)
-        "uselib",
-#    endif
         "ustat",
         "utimes",
 #endif // !ARCH(AARCH64)

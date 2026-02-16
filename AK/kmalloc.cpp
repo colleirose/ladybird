@@ -36,7 +36,6 @@ void operator delete(void* ptr) noexcept
 
 void operator delete(void* ptr, size_t size) noexcept
 {
-    secure_memzero(ptr, size);
     return free(ptr);
 }
 
@@ -59,7 +58,6 @@ void operator delete[](void* ptr) noexcept
 
 void operator delete[](void* ptr, size_t size) noexcept
 {
-    secure_memzero(ptr, size);
     return free(ptr);
 }
 

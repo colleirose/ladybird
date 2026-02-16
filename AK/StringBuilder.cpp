@@ -364,6 +364,12 @@ void StringBuilder::clear()
     m_buffer.resize(string_builder_prefix_size(m_mode));
 }
 
+void StringBuilder::clear_sensitive()
+{
+    secure_memzero(m_buffer.data(), m_buffer.size());
+    clear();
+}
+
 ErrorOr<void> StringBuilder::try_append_code_point(u32 code_point)
 {
     if (!is_unicode(code_point)) {

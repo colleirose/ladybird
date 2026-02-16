@@ -8,7 +8,6 @@
 #include <AK/Error.h>
 #include <AK/Hex.h>
 #include <AK/ReadonlySpan.h>
-#include <AK/ScopeGuard.h>
 #include <AK/Span.h>
 #include <AK/String.h>
 #include <AK/StringBuilder.h>
@@ -34,13 +33,10 @@ inline ErrorOr<InternalWindowsCapabilities> GetWindowsCapabilityData(Vector<AppC
     // Create a list of capability nanmes
     Vector<ByteString> capability_names;
     if (capabilities.contains(AppContainerCapability::Networking)) {
-        constexpr auto network_capabilities = Array {
+        capability_names.extend({
             L"internetClient",
             L"privateNetworkClientServer", // Needed for accessing localhost and local network sites
-        };
-
-        for (size_t i = 0; i < network_capabilities.length; i++)
-            TRY(capability_names.try_append(network_capabilities[i]));
+        })
     }
 
     if (capabilities.contains(AppContainerCapability::Filesystem)) {
@@ -48,38 +44,36 @@ inline ErrorOr<InternalWindowsCapabilities> GetWindowsCapabilityData(Vector<AppC
         // For now we are in an earlier stage of sandboxing functionality and we're mostly looking at
         // making it more difficult for the browser to become an attack vector to gain persistent control of the system.
         // But these definitely need to be restricted more once everything else is stable.
-        constexpr auto filesystem_capabilities = Array {
+        capability_names.extend({
             L"documentsLibrary",
             L"musicLibrary",
             L"picturesLibrary",
             L"videosLibrary",
             L"removableStorage",
-        };
-
-        for (size_t i = 0; i < filesystem_capabilities.length; i++)
-            TRY(capability_names.try_append(filesystem_capabilities[i]));
+        });
     }
+
+    // FIX-BEFORE-PR: Are location and user certificates ACTUALLY needed?
 
     if (capabilities.contains(AppContainerCapability::Location)) {
         // For the web location API
-        TRY(capability_names.try_append(L"location"));
+        capability_names.append(L"location");
     }
 
     if (capabilities.contains(AppContainerCapability::UserCertificates)) {
         // Needed for things like U2F authentication
-        TRY(capability_names.try_append(L"sharedUserCertificates"));
+        capability_names.append(L"sharedUserCertificates");
     }
 
     // Construct the Windows data
     DWORD capability_count = capability_names.size();
     InternalWindowsCapabilities internal_caps;
-    TRY(internal_caps.try_ensure_capacity(capability_count * sizeof(SID_AND_ATTRIBUTES)));
 
     // FIX-BEFORE-PR:
     // auto internal_caps = (PSID_AND_ATTRIBUTES)Core::Windows::HeapAlloc(GetProcessHeap(), 0, capability_count * sizeof(SID_AND_ATTRIBUTES));
     for (DWORD i = 0; i < capability_count; ++i) {
         auto sid = TRY(Core::Windows::GetAppContainerCapabilitySidFromName(capability_names[i]));
-        TRY(internal_caps.try_append(sid));
+        internal_caps.append(sid);
     }
 
     return internal_caps;
@@ -110,7 +104,7 @@ ErrorOr<AppContainer> CreateAppContainer(Vector<AppContainerCapability> capabili
             return Error::from_windows_error();
 
         // FIX-BEFORE-PR: this might just be wrong but im too tired to test right now
-        TRY(cap_bytes.try_append(*sid_string_buf));
+        cap_bytes.append(*sid_string_buf);
         Core::Windows::LocalFree(sid_string_buf);
     }
 
@@ -133,7 +127,7 @@ ErrorOr<AppContainer> CreateAppContainer(Vector<AppContainerCapability> capabili
 
     if (FAILED(hr)) {
         if (hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)) {
-            // seems like this function can only fail for invalid arguments, so it is likely mostly infallible with our usage, but check just in case
+            // seems like this function can only fail for invalid arguments, so it is probably never going to error with our usage, but check just in case
             hr = DeriveAppContainerSidFromAppContainerName((PCWSTR)container_name.characters(), &local_sid);
             if (hr != S_OK)
                 return Error::from_windows_error(hr);

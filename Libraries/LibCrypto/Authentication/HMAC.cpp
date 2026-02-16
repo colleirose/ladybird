@@ -39,14 +39,15 @@ void HMAC::update(u8 const* message, size_t length)
 
 ByteBuffer HMAC::digest()
 {
-    auto buf = MUST(ByteBuffer::create_uninitialized(digest_size()));
+    auto buf = MUST(ByteBuffer::create_uninitialized(digest_size(), AK::EraseBufferOnFree::Yes));
 
     auto size = digest_size();
     if (EVP_MAC_final(m_ctx, buf.data(), &size, size) != 1) {
         VERIFY_NOT_REACHED();
     }
 
-    return MUST(buf.slice(0, size));
+    auto res = MUST(buf.slice(0, size));
+    return res;
 }
 
 void HMAC::reset()

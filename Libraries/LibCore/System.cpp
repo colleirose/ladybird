@@ -65,11 +65,13 @@ extern "C" {
 #    include <image.h>
 #endif
 
+#if ARCH(AARCH64) && defined(AK_OS_LINUX)
 // Arm MTE is a CPU feature to automatically detect memory corruption. It's currently known to be supported on most Google CPUs and a few MediaTek CPUs.
 // Although there are some known flaws, it is a very promising and low-overhead memory corruption mitigation that has been shown to be effective in production.
+// It increases memory usage by about 3% on supported systems.
 // For more information, see https://learn.arm.com/learning-paths/mobile-graphics-and-gaming/mte/mte/ and https://projectzero.google/2023/08/summary-mte-as-implemented.html
 // It's currently used for all memory allocated by Core::System::mmap() on supported systems.
-#if ARCH(AARCH64) && defined(AK_OS_LINUX)
+
 #    include <sys/prctl.h>
 
 // Constant values are from https://learn.arm.com/learning-paths/laptops-and-desktops/memory-tagged-dynamic-memory-allocator/how-to-2/ and https://docs.kernel.org/next/arm64/memory-tagging-extension.html
@@ -157,12 +159,7 @@ inline static bool IsMteSupportedForAllocationSize(size_t allocation_size)
         return true;
     }
 
-    if (errno == ENOMEM) {
-        // Do not set the cache in this case.
-        // This is very unlikely to happen, but whatever.
-        warnln("The process is out of memory and MTE cannot be tested for.");
-        return false;
-    }
+    VERIFY(errno != ENOMEM); // crash if there isn't 16 bytes of available memory because it's pointless to continue at that point
 
     cached_mte_support = MteSupportCache::Unsupported;
     auto map_err = Error::from_syscall("mmap"sv, errno).string_literal();
