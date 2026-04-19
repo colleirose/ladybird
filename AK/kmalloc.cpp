@@ -1,11 +1,54 @@
 /*
  * Copyright (c) 2018-2020, Andreas Kling <andreas@ladybird.org>
  * Copyright (c) 2021, Daniel Bertalan <dani@danielbertalan.dev>
+ * Copyright (c) 2026, Colleirose <criticskate@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Platform.h>
 #include <AK/kmalloc.h>
+
+#if defined(AK_OS_WINDOWS)
+#    include <AK/Windows.h>
+#endif
+
+void* kmalloc_sensitive(size_t size)
+{
+    if (size == 0) [[unlikely]]
+        return nullptr;
+
+    void* ptr = kmalloc(size);
+    if (!ptr) [[unlikely]]
+        return nullptr;
+
+    if (auto lock_res = lock_memory(ptr, size); lock_res.is_error()) [[unlikely]]
+        warnln("kmalloc_sensitive failed to lock memory: {}", lock_res.release_error());
+
+    return ptr;
+}
+
+void kfree_sized_sensitive(void* ptr, size_t size)
+{
+    secure_memzero(ptr, size);
+
+    if (auto unlock_res = unlock_memory(ptr, size); unlock_res.is_error()) {
+        Error err = unlock_res.release_error();
+        // It's fine if the memory isn't locked, this function can be used for both locked and unlocked memory
+        bool already_locked = false;
+
+#if defined(AK_OS_WINDOWS)
+        // It seems that only Windows documents returning a particular error when trying to unlock memory that isn't locked
+        if (err.err_code == ERROR_NOT_LOCKED) [[likely]]
+            already_locked = true;
+#endif
+
+        if (!already_locked)
+            warnln("kfree_sized_sensitive failed to unlock memory for a reason other than the memory not being locked: {}", err.string_literal());
+    }
+
+    kfree_sized(ptr, size);
+}
 
 #if defined(AK_OS_SERENITY)
 

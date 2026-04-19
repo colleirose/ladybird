@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2018-2021, Andreas Kling <andreas@ladybird.org>
  * Copyright (c) 2021, Gunnar Beutner <gbeutner@serenityos.org>
+ * Copyright (c) 2026, Colleirose <criticskate@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -10,6 +11,7 @@
 #include <AK/Assertions.h>
 #include <AK/Badge.h>
 #include <AK/Error.h>
+#include <AK/Memory.h>
 #include <AK/Span.h>
 #include <AK/Types.h>
 #include <AK/kmalloc.h>
@@ -27,23 +29,49 @@ public:
         clear();
     }
 
-    ByteBuffer(ByteBuffer const& other)
+    // FIX-BEFORE-PR: does the way i am doing zero-on-free really work
+    constexpr auto ZERO_ON_FREE_FLAG = 1;
+    constexpr auto INLINE_BUFFER_FLAG = 2;
+
+    enum class EraseBufferOnFree : u8 {
+        Unspecified,
+        No,
+        Yes,
+    };
+
+    enum class ZeroFillNewElements : u8 {
+        No,
+        Yes,
+    };
+
+    ByteBuffer(EraseBufferOnFree erase_option)
     {
+        auto buffer = ByteBuffer();
+        buffer.set_erase_on_free(erase_option);
+        move_from(move(buffer));
+    }
+
+    ByteBuffer(ByteBuffer const& other, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
+    {
+        set_erase_on_free(erase_option);
+
         MUST(try_resize(other.size()));
         VERIFY(m_size == other.size());
         __builtin_memcpy(data(), other.data(), other.size());
     }
 
-    ByteBuffer(ByteBuffer&& other)
+    ByteBuffer(ByteBuffer&& other, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
+        // this will also apply to the new buffer because move_from() will apply it
+        // if its unspecified we'll end up with just whatever was in the old buffer
+        set_erase_on_free(erase_option);
         move_from(move(other));
     }
 
     ByteBuffer& operator=(ByteBuffer&& other)
     {
         if (this != &other) {
-            if (!m_inline)
-                kfree(m_outline_buffer);
+            clear();
             move_from(move(other));
         }
         return *this;
@@ -52,53 +80,57 @@ public:
     ByteBuffer& operator=(ByteBuffer const& other)
     {
         if (this != &other) {
+            set_erase_on_free(other.is_erase_on_free());
+
             if (m_size > other.size()) {
                 trim(other.size(), true);
             } else {
                 MUST(try_resize(other.size()));
             }
+
             __builtin_memcpy(data(), other.data(), other.size());
         }
         return *this;
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> create_uninitialized(size_t size)
+    [[nodiscard]] static ErrorOr<ByteBuffer> create_uninitialized(size_t size, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
-        auto buffer = ByteBuffer();
+        auto buffer = ByteBuffer(erase_option);
         TRY(buffer.try_resize(size));
         return { move(buffer) };
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> create_zeroed(size_t size)
+    [[nodiscard]] static ErrorOr<ByteBuffer> create_zeroed(size_t size, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
-        auto buffer = TRY(create_uninitialized(size));
+        auto buffer = TRY(create_uninitialized(size, erase_option));
 
         buffer.zero_fill();
         VERIFY(size == 0 || (buffer[0] == 0 && buffer[size - 1] == 0));
         return { move(buffer) };
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> copy(void const* data, size_t size)
+    [[nodiscard]] static ErrorOr<ByteBuffer> copy(void const* data, size_t size, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
-        auto buffer = TRY(create_uninitialized(size));
-        if (buffer.m_inline && size > inline_capacity)
+        auto buffer = TRY(create_uninitialized(size, erase_option));
+        if (buffer.is_inline() && size > inline_capacity)
             VERIFY_NOT_REACHED();
         if (size != 0)
             __builtin_memcpy(buffer.data(), data, size);
+
         return { move(buffer) };
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> copy(ReadonlyBytes bytes)
+    [[nodiscard]] static ErrorOr<ByteBuffer> copy(ReadonlyBytes bytes, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
-        return copy(bytes.data(), bytes.size());
+        return copy(bytes.data(), bytes.size(), erase_option);
     }
 
-    [[nodiscard]] static ErrorOr<ByteBuffer> xor_buffers(ReadonlyBytes first, ReadonlyBytes second)
+    [[nodiscard]] static ErrorOr<ByteBuffer> xor_buffers(ReadonlyBytes first, ReadonlyBytes second, EraseBufferOnFree erase_option = EraseBufferOnFree::Unspecified)
     {
         if (first.size() != second.size())
             return Error::from_errno(EINVAL);
 
-        auto buffer = TRY(create_uninitialized(first.size()));
+        auto buffer = TRY(create_uninitialized(first.size(), erase_option));
         auto buffer_data = buffer.data();
         auto first_data = first.data();
         auto second_data = second.data();
@@ -130,8 +162,39 @@ public:
         return data()[i];
     }
 
-    [[nodiscard]] bool is_empty() const { return m_size == 0; }
-    [[nodiscard]] size_t size() const { return m_size; }
+    [[nodiscard]] ALWAYS_INLINE size_t capacity() const { return is_inline() ? m_inline_capacity : m_outline_capacity; }
+    [[nodiscard]] ALWAYS_INLINE size_t size() const { return m_size; }
+    [[nodiscard]] ALWAYS_INLINE bool is_empty() const { return m_size == 0; }
+    [[nodiscard]] ALWAYS_INLINE bool is_inline() const { return flags & INLINE_BUFFER_FLAG; }
+    [[nodiscard]] ALWAYS_INLINE bool is_erase_on_free() const { return m_flags & ZERO_ON_FREE_FLAG; }
+
+    ALWAYS_INLINE void set_erase_on_free(bool option)
+    {
+        if (is_erase_on_free() == option)
+            return;
+
+        if (option)
+            m_flags |= ZERO_ON_FREE_FLAG;
+        else
+            m_flags &= ~ZERO_ON_FREE_FLAG;
+    }
+
+    ALWAYS_INLINE void set_erase_on_free(EraseBufferOnFree option)
+    {
+        if (option != EraseBufferOnFree::Unspecified)
+            set_erase_on_free(option == EraseBufferOnFree::Yes);
+    }
+
+    ALWAYS_INLINE void set_buffer_is_inline(bool option)
+    {
+        if (is_inline() == option)
+            return;
+
+        if (option)
+            m_flags |= INLINE_BUFFER_FLAG;
+        else
+            m_flags &= ~INLINE_BUFFER_FLAG;
+    }
 
 #ifdef AK_COMPILER_GCC
 #    pragma GCC diagnostic push
@@ -140,9 +203,9 @@ public:
 #endif
     [[nodiscard]] u8* data()
     {
-        return m_inline ? m_inline_buffer : m_outline_buffer;
+        return is_inline() ? m_inline_buffer : m_outline_buffer;
     }
-    [[nodiscard]] u8 const* data() const { return m_inline ? m_inline_buffer : m_outline_buffer; }
+    [[nodiscard]] u8 const* data() const { return is_inline() ? m_inline_buffer : m_outline_buffer; }
 #ifdef AK_COMPILER_GCC
 #    pragma GCC diagnostic pop
 #endif
@@ -170,22 +233,29 @@ public:
         // I cannot hand you a slice I don't have
         VERIFY(offset + size <= this->size());
 
-        return copy(offset_pointer(offset), size);
+        return copy(offset_pointer(offset), size, is_erase_on_free() ? EraseBufferOnFree::Yes : EraseBufferOnFree::Unspecified);
     }
 
+    // Frees memory allocated for the buffer and erases the buffer data if marked as zero-on-free
     void clear()
     {
-        if (!m_inline) {
-            kfree(m_outline_buffer);
-            m_inline = true;
+        bool const is_memzero = is_erase_on_free();
+
+        if (is_inline()) {
+            if (is_memzero)
+                secure_memzero(m_inline_buffer, inline_capacity);
+        } else {
+            if (is_memzero) {
+                kfree_sized_sensitive(m_outline_buffer, m_outline_capacity);
+            } else {
+                kfree_sized(m_outline_buffer, m_outline_capacity);
+            }
+
+            set_buffer_is_inline(true);
         }
+
         m_size = 0;
     }
-
-    enum class ZeroFillNewElements {
-        No,
-        Yes,
-    };
 
     ALWAYS_INLINE void resize(size_t new_size, ZeroFillNewElements zero_fill_new_elements = ZeroFillNewElements::No)
     {
@@ -195,8 +265,16 @@ public:
     void trim(size_t size, bool may_discard_existing_data)
     {
         VERIFY(size <= m_size);
-        if (!m_inline && size <= inline_capacity)
+
+        if (size == m_size)
+            return;
+
+        if (is_erase_on_free())
+            secure_memzero(offset_pointer(size), m_size - size); // erase everything past the new location
+
+        if (!is_inline() && size <= inline_capacity)
             shrink_into_inline_buffer(size, may_discard_existing_data);
+
         m_size = size;
     }
 
@@ -314,20 +392,17 @@ public:
     operator ReadonlyBytes() const&& = delete;
     operator ReadonlyBytes() const& LIFETIME_BOUND { return bytes(); }
 
-    ALWAYS_INLINE size_t capacity() const { return m_inline ? inline_capacity : m_outline_capacity; }
-    ALWAYS_INLINE bool is_inline() const { return m_inline; }
-
     struct OutlineBuffer {
         Bytes buffer;
         size_t capacity { 0 };
     };
     Optional<OutlineBuffer> leak_outline_buffer(Badge<StringBuilder>)
     {
-        if (m_inline)
+        if (is_inline())
             return {};
 
         auto buffer = bytes();
-        m_inline = true;
+        set_buffer_is_inline(true);
         m_size = 0;
 
         return OutlineBuffer { buffer, capacity() };
@@ -337,16 +412,18 @@ private:
     void move_from(ByteBuffer&& other)
     {
         m_size = other.m_size;
-        m_inline = other.m_inline;
-        if (!other.m_inline) {
+        set_buffer_is_inline(other.is_inline());
+        set_erase_on_free(other.is_erase_on_free());
+        if (!other.is_inline()) {
             m_outline_buffer = other.m_outline_buffer;
             m_outline_capacity = other.m_outline_capacity;
         } else {
             VERIFY(other.m_size <= inline_capacity);
             __builtin_memcpy(m_inline_buffer, other.m_inline_buffer, other.m_size);
         }
+
         other.m_size = 0;
-        other.m_inline = true;
+        other.set_buffer_is_inline(true);
     }
 
     NEVER_INLINE void shrink_into_inline_buffer(size_t size, bool may_discard_existing_data)
@@ -355,8 +432,14 @@ private:
         auto* outline_buffer = m_outline_buffer;
         if (!may_discard_existing_data)
             __builtin_memcpy(m_inline_buffer, outline_buffer, size);
-        kfree(outline_buffer);
-        m_inline = true;
+
+        if (is_erase_on_free()) {
+            kfree_sized_sensitive(outline_buffer, outline_capacity);
+        } else {
+            kfree_sized(outline_buffer, outline_capacity);
+        }
+
+        set_buffer_is_inline(true);
     }
 
     NEVER_INLINE ErrorOr<void> try_ensure_capacity_slowpath(size_t new_capacity)
@@ -368,20 +451,33 @@ private:
         // This is most noticeable in Lagom, where kmalloc_good_size is just a no-op.
         new_capacity = max(new_capacity, (capacity() * 3) / 2);
         new_capacity = kmalloc_good_size(new_capacity);
-        auto* new_buffer = static_cast<u8*>(kmalloc(new_capacity));
+
+        u8* new_buffer = nullptr;
+        bool const is_memzero = is_erase_on_free;
+
+        if (is_memzero) {
+            new_buffer = static_cast<u8*>(kmalloc_sensitive(new_capacity));
+        } else {
+            new_buffer = static_cast<u8*>(kmalloc(new_capacity));
+        }
+
         if (!new_buffer)
             return Error::from_errno(ENOMEM);
 
-        if (m_inline) {
+        if (is_inline()) {
             __builtin_memcpy(new_buffer, data(), m_size);
         } else if (m_outline_buffer) {
             __builtin_memcpy(new_buffer, m_outline_buffer, min(new_capacity, m_outline_capacity));
-            kfree(m_outline_buffer);
+            if (is_memzero) {
+                kfree_sized_sensitive(m_outline_buffer, m_outline_capacity);
+            } else {
+                kfree_sized(m_outline_buffer, m_outline_capacity);
+            }
         }
 
         m_outline_buffer = new_buffer;
         m_outline_capacity = new_capacity;
-        m_inline = false;
+        set_buffer_is_inline(false);
         return {};
     }
 
@@ -393,7 +489,7 @@ private:
         };
     };
     size_t m_size { 0 };
-    bool m_inline { true };
+    u8 m_flags { 0 };
 };
 
 }

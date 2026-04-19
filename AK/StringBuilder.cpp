@@ -364,6 +364,13 @@ void StringBuilder::clear()
     m_buffer.resize(string_builder_prefix_size(m_mode));
 }
 
+void StringBuilder::clear_sensitive()
+{
+    m_buffer.set_erase_on_free(true);
+    clear();
+    m_buffer.set_erase_on_free(false); // no longer sensitive now that it's cleared
+}
+
 ErrorOr<void> StringBuilder::try_append_code_point(u32 code_point)
 {
     if (!is_unicode(code_point)) {

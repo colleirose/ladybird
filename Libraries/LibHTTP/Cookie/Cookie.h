@@ -45,12 +45,21 @@ struct Cookie {
     bool http_only { false };
     bool host_only { false };
     bool persistent { false };
+
+    ~Cookie()
+    {
+        if (HTTP::Cookie::is_cookie_likely_secret(*this))
+            secure_memzero(&value);
+    }
 };
 
 struct VersionedCookie {
     Optional<Core::SharedVersion> cookie_version;
     String cookie;
 };
+
+using VariantCookie = Variant<HTTP::Cookie::Cookie const&, HTTP::Cookie::ParsedCookie const&>;
+bool is_cookie_likely_secret(VariantCookie cookie);
 
 StringView same_site_to_string(SameSite same_site_mode);
 SameSite same_site_from_string(StringView same_site_mode);

@@ -35,7 +35,7 @@ public:
     UnsignedBigInteger const& public_exponent() const { return m_public_exponent; }
     size_t length() const { return m_length; }
 
-    ErrorOr<bool> is_valid() const;
+    bool is_valid() const;
 
     ErrorOr<ByteBuffer> export_as_der() const
     {
@@ -78,6 +78,7 @@ public:
     {
     }
 
+    // BigInteger values will be zeroed on free so we don't need to do that in a destructor here
     RSAPrivateKey() = default;
 
     UnsignedBigInteger const& modulus() const { return m_modulus; }

@@ -61,7 +61,7 @@ WebIDL::ExceptionOr<GC::Root<WebIDL::ArrayBufferView>> Crypto::get_random_values
 
     auto typed_array_record = JS::make_typed_array_with_buffer_witness_record(typed_array, JS::ArrayBuffer::Order::SeqCst);
 
-    // IMPLEMENTATION DEFINED: If the viewed array buffer is out-of-bounds, throw a InvalidStateError and terminate the algorithm.
+    // IMPLEMENTATION DEFINED: If the viewed array buffer is out-of-bounds, throw an InvalidStateError and terminate the algorithm.
     if (JS::is_typed_array_out_of_bounds(typed_array_record))
         return WebIDL::InvalidStateError::create(realm(), Utf16String::formatted(JS::ErrorType::BufferOutOfBounds.format(), "TypedArray"sv));
 
@@ -70,7 +70,7 @@ WebIDL::ExceptionOr<GC::Root<WebIDL::ArrayBufferView>> Crypto::get_random_values
         return WebIDL::QuotaExceededError::create(realm(), "array's byteLength may not be greater than 65536"_utf16);
 
     // 3. Overwrite all elements of array with cryptographically strong random values of the appropriate type.
-    fill_with_random(array->viewed_array_buffer()->buffer().bytes().slice(array->byte_offset(), array->byte_length()));
+    fill_with_random(array->viewed_array_buffer()->buffer(ByteBuffer::EraseBufferOnFree::Yes).bytes().slice(array->byte_offset(), array->byte_length()));
 
     // 4. Return array.
     return array;

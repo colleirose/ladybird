@@ -44,7 +44,7 @@ static ErrorOr<ByteBuffer> read_mldsa_seed(ASN1::Decoder& decoder, Vector<String
     }
     POP_SCOPE();
 
-    return ByteBuffer::copy(seed);
+    return ByteBuffer::copy(seed, ByteBuffer::EraseBufferOnFree::Yes);
 }
 
 static ErrorOr<ByteBuffer> read_mldsa_private_key(MLDSASize size, ASN1::Decoder& decoder, Vector<StringView>& current_scope)
@@ -52,9 +52,14 @@ static ErrorOr<ByteBuffer> read_mldsa_private_key(MLDSASize size, ASN1::Decoder&
     // expandedKey ::= OCTET STRING (SIZE (2560 | 4032 | 4896))
 
     ENTER_TYPED_SCOPE(OctetString, "expandedKey");
-    READ_OBJECT(OctetString, StringView, expanded_key_bits);
+    READ_OBJECT(OctetString, StringView, expanded_key_sv);
 
-    auto const expanded_key = expanded_key_bits.bytes();
+    auto expanded_key = expanded_key_sv.bytes();
+
+    ScopeGuard guard = [&] {
+        secure_memzero(const_cast<unsigned char*>(expanded_key.data()), expanded_key.size());
+    };
+
     switch (size) {
     case MLDSA44:
         if (expanded_key.size() != 2560) {
@@ -76,7 +81,7 @@ static ErrorOr<ByteBuffer> read_mldsa_private_key(MLDSASize size, ASN1::Decoder&
     }
     POP_SCOPE();
 
-    return ByteBuffer::copy(expanded_key);
+    return ByteBuffer::copy(expanded_key, ByteBuffer::EraseBufferOnFree::Yes);
 }
 
 ErrorOr<ByteBuffer> MLDSAPrivateKey::export_as_der() const
@@ -213,7 +218,7 @@ ErrorOr<ByteBuffer> MLDSA::sign(ReadonlyBytes message)
     OPENSSL_TRY(EVP_PKEY_sign_message_init(sign_ctx, sign_algorithm, params));
     OPENSSL_TRY(EVP_PKEY_sign(sign_ctx, nullptr, &sign_size, message.data(), message.size()));
 
-    auto result = TRY(ByteBuffer::create_uninitialized(sign_size));
+    auto result = TRY(ByteBuffer::create_uninitialized(sign_size, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_sign(sign_ctx, result.data(), &sign_size, message.data(), message.size()));
 
     return result;

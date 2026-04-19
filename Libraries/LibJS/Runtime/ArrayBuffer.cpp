@@ -21,23 +21,38 @@ static GC::Ref<Object> prototype_for_shared_state(Realm& realm, DataBlock::Share
         : realm.intrinsics().shared_array_buffer_prototype();
 }
 
-ThrowCompletionOr<GC::Ref<ArrayBuffer>> ArrayBuffer::create(Realm& realm, size_t byte_length, DataBlock::Shared is_shared)
+ThrowCompletionOr<GC::Ref<ArrayBuffer>> ArrayBuffer::create(Realm& realm, size_t byte_length, DataBlock::Shared is_shared, ByteBuffer::EraseBufferOnFree erase_option)
 {
-    auto buffer = ByteBuffer::create_zeroed(byte_length);
+    auto buffer = ByteBuffer::create_zeroed(byte_length, erase_option);
     if (buffer.is_error())
         return realm.vm().throw_completion<RangeError>(ErrorType::NotEnoughMemoryToAllocate, byte_length);
 
     return realm.create<ArrayBuffer>(buffer.release_value(), is_shared, prototype_for_shared_state(realm, is_shared));
 }
 
-GC::Ref<ArrayBuffer> ArrayBuffer::create(Realm& realm, ByteBuffer buffer, DataBlock::Shared is_shared)
+GC::Ref<ArrayBuffer> ArrayBuffer::create(Realm& realm, ByteBuffer buffer, DataBlock::Shared is_shared, ByteBuffer::EraseBufferOnFree erase_option)
 {
-    return realm.create<ArrayBuffer>(move(buffer), is_shared, prototype_for_shared_state(realm, is_shared));
+    return realm.create<ArrayBuffer>(move(ByteBuffer(buffer, erase_option)), is_shared, prototype_for_shared_state(realm, is_shared));
 }
 
-GC::Ref<ArrayBuffer> ArrayBuffer::create(Realm& realm, ByteBuffer* buffer, DataBlock::Shared is_shared)
+GC::Ref<ArrayBuffer> ArrayBuffer::create(Realm& realm, ByteBuffer* buffer, DataBlock::Shared is_shared, ByteBuffer::EraseBufferOnFree erase_option)
 {
-    return realm.create<ArrayBuffer>(buffer, is_shared, prototype_for_shared_state(realm, is_shared));
+    return realm.create<ArrayBuffer>(move(ByteBuffer(buffer, erase_option)), is_shared, prototype_for_shared_state(realm, is_shared));
+}
+
+ThrowCompletionOr<GC::Ref<ArrayBuffer>> create(Realm& realm, size_t size, ByteBuffer::EraseBufferOnFree erase_option)
+{
+    return create(realm, size, DataBlock::Shared::No, erase_option);
+}
+
+GC::Ref<ArrayBuffer> create(Realm& realm, ByteBuffer buffer, ByteBuffer::EraseBufferOnFree erase_option)
+{
+    return create(realm, buffer, DataBlock::Shared::No, erase_option);
+}
+
+GC::Ref<ArrayBuffer> create(Realm& realm, ByteBuffer* buffer, ByteBuffer::EraseBufferOnFree erase_option)
+{
+    return create(realm, buffer, DataBlock::Shared::No, erase_option);
 }
 
 ArrayBuffer::ArrayBuffer(ByteBuffer buffer, DataBlock::Shared is_shared, Object& prototype)

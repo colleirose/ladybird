@@ -6,6 +6,9 @@
  */
 
 #include <AK/ByteBuffer.h>
+#include <AK/Debug.h>
+#include <AK/Memory.h>
+#include <LibCrypto/ASN1/ASN1.h>
 #include <LibCrypto/ASN1/DER.h>
 #include <LibCrypto/ASN1/PEM.h>
 #include <LibCrypto/Certificate/Certificate.h>
@@ -220,7 +223,7 @@ static ErrorOr<OpenSSL_PKEY> private_key_to_openssl_pkey(RSAPrivateKey const& pr
 #undef OPENSSL_SET_KEY_PARAM_NOT_ZERO
 
 // https://www.rfc-editor.org/rfc/rfc3447.html#section-3.1
-ErrorOr<bool> RSAPublicKey::is_valid() const
+bool RSAPublicKey::is_valid() const
 {
     // In a valid RSA public key, the RSA modulus n is a product of u
     // distinct odd primes r_i, i = 1, 2, ..., u, where u >= 2, and the RSA
@@ -356,7 +359,7 @@ ErrorOr<ByteBuffer> RSA::encrypt(ReadonlyBytes in)
     size_t out_size = 0;
     OPENSSL_TRY(EVP_PKEY_encrypt(ctx.ptr(), nullptr, &out_size, in.data(), in.size()));
 
-    auto out = TRY(ByteBuffer::create_uninitialized(out_size));
+    auto out = TRY(ByteBuffer::create_uninitialized(out_size, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_encrypt(ctx.ptr(), out.data(), &out_size, in.data(), in.size()));
     return out.slice(0, out_size);
 }
@@ -373,7 +376,7 @@ ErrorOr<ByteBuffer> RSA::decrypt(ReadonlyBytes in)
     size_t out_size = 0;
     OPENSSL_TRY(EVP_PKEY_decrypt(ctx.ptr(), nullptr, &out_size, in.data(), in.size()));
 
-    auto out = TRY(ByteBuffer::create_uninitialized(out_size));
+    auto out = TRY(ByteBuffer::create_uninitialized(out_size, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_decrypt(ctx.ptr(), out.data(), &out_size, in.data(), in.size()));
     return out.slice(0, out_size);
 }
@@ -390,7 +393,7 @@ ErrorOr<ByteBuffer> RSA::sign(ReadonlyBytes message)
     size_t signature_size = 0;
     OPENSSL_TRY(EVP_PKEY_sign(ctx.ptr(), nullptr, &signature_size, message.data(), message.size()));
 
-    auto signature = TRY(ByteBuffer::create_uninitialized(signature_size));
+    auto signature = TRY(ByteBuffer::create_uninitialized(signature_size, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_sign(ctx.ptr(), signature.data(), &signature_size, message.data(), message.size()));
     return signature.slice(0, signature_size);
 }
@@ -535,7 +538,7 @@ ErrorOr<ByteBuffer> RSA_EMSA::sign(ReadonlyBytes message)
     size_t signature_size = 0;
     OPENSSL_TRY(EVP_DigestSign(ctx.ptr(), nullptr, &signature_size, message.data(), message.size()));
 
-    auto signature = TRY(ByteBuffer::create_uninitialized(signature_size));
+    auto signature = TRY(ByteBuffer::create_uninitialized(signature_size, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_DigestSign(ctx.ptr(), signature.data(), &signature_size, message.data(), message.size()));
     return signature.slice(0, signature_size);
 }

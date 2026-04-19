@@ -33,7 +33,7 @@ ErrorOr<ByteBuffer> PBKDF2::derive_key(ReadonlyBytes password, ReadonlyBytes sal
         OSSL_PARAM_END,
     };
 
-    auto buf = TRY(ByteBuffer::create_uninitialized(key_length_bytes));
+    auto buf = TRY(ByteBuffer::create_uninitialized(key_length_bytes, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_KDF_derive(ctx.ptr(), buf.data(), key_length_bytes, params));
 
     return buf;

@@ -39,7 +39,7 @@ void HMAC::update(u8 const* message, size_t length)
 
 ByteBuffer HMAC::digest()
 {
-    auto buf = MUST(ByteBuffer::create_uninitialized(digest_size()));
+    auto buf = MUST(ByteBuffer::create_uninitialized(digest_size(), ByteBuffer::EraseBufferOnFree::Yes));
 
     auto size = digest_size();
     if (EVP_MAC_final(m_ctx, buf.data(), &size, size) != 1) {

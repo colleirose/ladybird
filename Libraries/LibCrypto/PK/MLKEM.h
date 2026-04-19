@@ -35,9 +35,9 @@ private:
 class MLKEMPrivateKey {
 public:
     MLKEMPrivateKey(ByteBuffer seed, ByteBuffer public_key, ByteBuffer private_key)
-        : m_seed(move(seed))
+        : m_seed(ByteBuffer(move(seed), ByteBuffer::EraseBufferOnFree::Yes))
         , m_public_key(move(public_key))
-        , m_private_key(move(private_key))
+        , m_private_key(ByteBuffer(move(private_key), ByteBuffer::EraseBufferOnFree::Yes))
     {
     }
 

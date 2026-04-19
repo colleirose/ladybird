@@ -134,6 +134,18 @@ public:
     Utf16String to_casefold() const;
     Utf16String to_fullwidth() const;
 
+    // NOTE: There is no guarantee about null-termination.
+    ReadonlyBytes bytes() const& LIFETIME_BOUND
+    {
+        if (has_short_ascii_storage())
+            return m_value.short_ascii_string.bytes();
+
+        if (has_utf16_storage())
+            return m_value->data->bytes();
+
+        return {};
+    }
+
     ALWAYS_INLINE Utf16String to_ascii_lowercase() const
     {
         auto view = utf16_view();

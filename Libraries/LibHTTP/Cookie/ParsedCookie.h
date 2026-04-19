@@ -25,6 +25,12 @@ struct ParsedCookie {
     Optional<String> path {};
     bool secure_attribute_present { false };
     bool http_only_attribute_present { false };
+
+    ~ParsedCookie()
+    {
+        if (HTTP::Cookie::is_cookie_likely_secret(*this))
+            secure_memzero(&value);
+    }
 };
 
 Optional<ParsedCookie> parse_cookie(URL::URL const&, StringView cookie_string);

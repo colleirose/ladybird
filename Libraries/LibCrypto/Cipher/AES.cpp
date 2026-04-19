@@ -63,7 +63,7 @@ ErrorOr<ByteBuffer> AESCBCCipher::decrypt(ReadonlyBytes ciphertext, ReadonlyByte
     OPENSSL_TRY(EVP_DecryptInit(ctx.ptr(), m_cipher, m_key.data(), iv.data()));
     OPENSSL_TRY(EVP_CIPHER_CTX_set_padding(ctx.ptr(), m_no_padding ? 0 : 1));
 
-    auto out = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + block_size()));
+    auto out = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + block_size(), ByteBuffer::EraseBufferOnFree::Yes));
     int out_size = 0;
     OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), out.data(), &out_size, ciphertext.data(), ciphertext.size()));
 
@@ -100,7 +100,7 @@ ErrorOr<ByteBuffer> AESCTRCipher::decrypt(ReadonlyBytes ciphertext, ReadonlyByte
 
     OPENSSL_TRY(EVP_DecryptInit(ctx.ptr(), m_cipher, m_key.data(), iv.data()));
 
-    auto out = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + block_size()));
+    auto out = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + block_size(), ByteBuffer::EraseBufferOnFree::Yes));
     int out_size = 0;
     OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), out.data(), &out_size, ciphertext.data(), ciphertext.size()));
 
@@ -164,7 +164,7 @@ ErrorOr<ByteBuffer> AESGCMCipher::decrypt(ReadonlyBytes ciphertext, ReadonlyByte
         OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), nullptr, &aad_size, aad.data(), aad.size()));
     }
 
-    auto out = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + block_size()));
+    auto out = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + block_size(), ByteBuffer::EraseBufferOnFree::Yes));
     int out_size = 0;
     OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), out.data(), &out_size, ciphertext.data(), ciphertext.size()));
 
@@ -259,7 +259,7 @@ ErrorOr<ByteBuffer> AESKWCipher::wrap(ReadonlyBytes plaintext) const
 
     OPENSSL_TRY(EVP_EncryptInit(ctx.ptr(), m_cipher, m_key.data(), nullptr));
 
-    auto out = TRY(ByteBuffer::create_uninitialized(plaintext.size() + block_size()));
+    auto out = TRY(ByteBuffer::create_uninitialized(plaintext.size() + block_size(), ByteBuffer::EraseBufferOnFree::Yes));
     int out_size = 0;
     OPENSSL_TRY(EVP_EncryptUpdate(ctx.ptr(), out.data(), &out_size, plaintext.data(), plaintext.size()));
 
@@ -275,7 +275,7 @@ ErrorOr<ByteBuffer> AESKWCipher::unwrap(ReadonlyBytes ciphertext) const
 
     OPENSSL_TRY(EVP_DecryptInit(ctx.ptr(), m_cipher, m_key.data(), nullptr));
 
-    auto out = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + block_size()));
+    auto out = TRY(ByteBuffer::create_uninitialized(ciphertext.size() + block_size(), ByteBuffer::EraseBufferOnFree::Yes));
     int out_size = 0;
     OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), out.data(), &out_size, ciphertext.data(), ciphertext.size()));
 

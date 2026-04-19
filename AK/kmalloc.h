@@ -35,6 +35,9 @@ inline void kfree(void* ptr)
     ak_kfree(ptr);
 }
 
+void* kmalloc_sensitive(size_t size);
+void kfree_sized_sensitive(void* ptr, size_t size);
+
 [[nodiscard]] inline void* kmalloc(size_t size)
 {
     return ak_kmalloc(size);

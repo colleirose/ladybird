@@ -28,7 +28,7 @@ struct SECPxxxr1Point {
 
     static ErrorOr<ByteBuffer> scalar_to_bytes(UnsignedBigInteger const& a, size_t size)
     {
-        auto a_bytes = TRY(ByteBuffer::create_uninitialized(a.byte_length()));
+        auto a_bytes = TRY(ByteBuffer::create_uninitialized(a.byte_length(), ByteBuffer::EraseBufferOnFree::Yes));
         auto a_result = a.export_data(a_bytes.span());
 
         if (a_result.size() > size)
@@ -37,7 +37,7 @@ struct SECPxxxr1Point {
         if (a_result.size() == size)
             return a_bytes;
 
-        auto a_extended_bytes = TRY(ByteBuffer::create_zeroed(size));
+        auto a_extended_bytes = TRY(ByteBuffer::create_zeroed(size, ByteBuffer::EraseBufferOnFree::Yes));
         a_extended_bytes.overwrite(size - a_result.size(), a_result.data(), a_result.size());
         return a_extended_bytes;
     }
@@ -70,7 +70,7 @@ struct SECPxxxr1Point {
         auto x = TRY(x_bytes());
         auto y = TRY(y_bytes());
 
-        auto bytes = TRY(ByteBuffer::create_uninitialized(1 + (size * 2)));
+        auto bytes = TRY(ByteBuffer::create_uninitialized(1 + (size * 2), ByteBuffer::EraseBufferOnFree::Yes));
         bytes[0] = 0x04; // uncompressed
         bytes.overwrite(1, x.data(), size);
         bytes.overwrite(1 + size, y.data(), size);

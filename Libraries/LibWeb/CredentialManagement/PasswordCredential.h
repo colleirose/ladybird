@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <AK/Memory.h>
+#include <LibCore/SecretString.h>
 #include <LibJS/Forward.h>
 #include <LibWeb/Bindings/PasswordCredentialPrototype.h>
 #include <LibWeb/Bindings/PlatformObject.h>
@@ -28,7 +30,7 @@ public:
 
     virtual ~PasswordCredential() override;
 
-    String const& password() const { return m_password; }
+    Core::SecretString const& password() const { return m_password; }
     URL::Origin const& origin() const { return m_origin; }
 
     String type() const override { return "password"_string; }
@@ -37,8 +39,7 @@ private:
     PasswordCredential(JS::Realm&, PasswordCredentialData const&, URL::Origin);
     virtual void initialize(JS::Realm&) override;
 
-    // TODO: Use Core::SecretString when it comes back
-    String m_password;
+    Core::SecretString m_password;
 
     // https://www.w3.org/TR/credential-management-1/#dom-credential-origin-slot
     URL::Origin m_origin;
@@ -48,7 +49,7 @@ private:
 struct PasswordCredentialData : CredentialData {
     Optional<String> name;
     Optional<String> icon_url;
-    String password;
+    Core::SecretString password;
 };
 
 // https://www.w3.org/TR/credential-management-1/#typedefdef-passwordcredentialinit

@@ -151,7 +151,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::encrypt(AlgorithmIdentifier const& algori
         return WebIDL::create_rejected_promise_from_exception(realm, normalized_algorithm.release_error());
 
     // 4. Let data be the result of getting a copy of the bytes held by the data parameter passed to the encrypt() method.
-    auto data_or_error = WebIDL::get_buffer_source_copy(*data_parameter->raw_object());
+    auto data_or_error = WebIDL::get_buffer_source_copy(*data_parameter->raw_object(), ByteBuffer::EraseBufferOnFree::Yes);
     if (data_or_error.is_error()) {
         VERIFY(data_or_error.error().code() == ENOMEM);
         return WebIDL::create_rejected_promise_from_exception(realm, vm.throw_completion<JS::InternalError>(vm.error_message(JS::VM::ErrorMessage::OutOfMemory)));
@@ -431,7 +431,7 @@ JS::ThrowCompletionOr<GC::Ref<WebIDL::Promise>> SubtleCrypto::import_key(Binding
         }
 
         // 2. Let keyData be the result of getting a copy of the bytes held by the keyData parameter passed to the importKey() method.
-        real_key_data = MUST(WebIDL::get_buffer_source_copy(*key_data.get<GC::Root<WebIDL::BufferSource>>()->raw_object()));
+        real_key_data = MUST(WebIDL::get_buffer_source_copy(*key_data.get<GC::Root<WebIDL::BufferSource>>()->raw_object(), ByteBuffer::EraseBufferOnFree::Yes));
     }
 
     if (format == Bindings::KeyFormat::Jwk) {
@@ -821,7 +821,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::derive_key(AlgorithmIdentifier algorithm,
         }
 
         // 15. Let result be the result of performing the import key operation specified by normalizedDerivedKeyAlgorithmImport using "raw" as format, secret as keyData, derivedKeyType as algorithm and using extractable and usages.
-        auto result_or_error = normalized_derived_key_algorithm_import.methods->import_key(*normalized_derived_key_algorithm_import.parameter, Bindings::KeyFormat::Raw, secret.release_value()->buffer(), extractable, key_usages);
+        auto result_or_error = normalized_derived_key_algorithm_import.methods->import_key(*normalized_derived_key_algorithm_import.parameter, Bindings::KeyFormat::Raw, secret.release_value()->buffer(ByteBuffer::EraseBufferOnFree::Yes), extractable, key_usages);
         if (result_or_error.is_error()) {
             WebIDL::reject_promise(realm, promise, Bindings::exception_to_throw_completion(realm.vm(), result_or_error.release_error()).release_value());
             return;
@@ -1040,7 +1040,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::unwrap_key(Bindings::KeyFormat format, Ke
     auto normalized_key_algorithm = normalized_key_algorithm_or_error.release_value();
 
     // 7. Let wrappedKey be the result of getting a copy of the bytes held by the wrappedKey parameter passed to the unwrapKey() method.
-    auto real_wrapped_key = MUST(WebIDL::get_buffer_source_copy(*wrapped_key.get<GC::Root<WebIDL::BufferSource>>()->raw_object()));
+    auto real_wrapped_key = MUST(WebIDL::get_buffer_source_copy(*wrapped_key.get<GC::Root<WebIDL::BufferSource>>()->raw_object(), ByteBuffer::EraseBufferOnFree::Yes));
 
     // 9. Let promise be a new Promise.
     auto promise = WebIDL::create_promise(realm);
@@ -1428,7 +1428,7 @@ GC::Ref<WebIDL::Promise> SubtleCrypto::decapsulate_key(AlgorithmIdentifier decap
         auto maybe_shared_key = normalized_shared_key_algorithm.methods->import_key(
             *normalized_shared_key_algorithm.parameter,
             Bindings::KeyFormat::RawSecret,
-            decapsulated_bits->buffer(),
+            decapsulated_bits->buffer(ByteBuffer::EraseBufferOnFree::Yes),
             extractable,
             usages);
         if (maybe_shared_key.is_error()) {

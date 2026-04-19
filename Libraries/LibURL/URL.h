@@ -88,7 +88,7 @@ public:
 
     String const& scheme() const { return m_data->scheme; }
     String const& username() const { return m_data->username; }
-    String const& password() const { return m_data->password; }
+    Core::SecretString const& password() const { return m_data->password; }
     Optional<Host> const& host() const { return m_data->host; }
     String serialized_host() const;
     ByteString basename() const;
@@ -177,7 +177,7 @@ private:
         String username;
 
         // A URL’s password is an ASCII string identifying a password. It is initially the empty string.
-        String password;
+        Core::SecretString password;
 
         // A URL’s host is null or a host. It is initially null.
         Optional<Host> host;

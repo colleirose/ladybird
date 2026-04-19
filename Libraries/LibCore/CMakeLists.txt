@@ -114,6 +114,7 @@ if (APPLE)
 endif()
 
 if (WIN32)
+    target_link_libraries(LibCore PRIVATE Crypt32.lib)
     target_link_libraries(LibCore PRIVATE ntdll.dll)
     find_path(DIRENT_INCLUDE_DIR dirent.h REQUIRED)
     target_include_directories(LibCore PRIVATE ${DIRENT_INCLUDE_DIR})

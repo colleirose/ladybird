@@ -83,7 +83,7 @@ ErrorOr<ByteBuffer> Argon2::derive_key(
         params[insertion_point++] = OSSL_PARAM_octet_string(OSSL_KDF_PARAM_ARGON2_AD, const_cast<u8*>(associated_data->data()), associated_data->size());
     }
 
-    auto buf = TRY(ByteBuffer::create_uninitialized(tag_length));
+    auto buf = TRY(ByteBuffer::create_uninitialized(tag_length, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_KDF_derive(ctx.ptr(), buf.data(), tag_length, params));
 
     return buf;

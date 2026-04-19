@@ -20,6 +20,8 @@ typedef struct evp_mac_ctx_st EVP_MAC_CTX;
 typedef struct evp_cipher_st EVP_CIPHER;
 typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
 
+int CRYPTO_secure_malloc_init(size_t size, size_t minsize);
+
 void ERR_print_errors_cb(int (*cb)(char const* str, size_t len, void* u), void* u);
 
 EVP_MD_CTX* EVP_MD_CTX_new();

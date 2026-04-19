@@ -21,7 +21,11 @@ class WEB_API Text
     GC_DECLARE_ALLOCATOR(Text);
 
 public:
-    virtual ~Text() override = default;
+    virtual ~Text() override
+    {
+        if (is_password_input())
+            secure_memzero(const_cast<Utf16String*>(data()));
+    }
 
     static WebIDL::ExceptionOr<GC::Ref<Text>> construct_impl(JS::Realm& realm, Utf16String data);
 

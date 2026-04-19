@@ -1,6 +1,7 @@
 add_cxx_compile_options(-Wvla)
 
 set(SOURCES
+    SecureBase64.cpp
     OpenSSL.cpp
     ASN1/ASN1.cpp
     ASN1/DER.cpp

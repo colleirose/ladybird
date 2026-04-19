@@ -48,7 +48,8 @@ WebIDL::ExceptionOr<GC::Ref<PasswordCredential>> create_password_credential(JS::
             //       and newPasswordObserved to true.
             if (token.equals_ignoring_ascii_case("new-password"sv)) {
                 if (auto password = form_data->get(name.value()); password.has<String>()) {
-                    data.password = password.get<String>();
+                    String const& str = password.get<String>();
+                    data.password = Core::SecretString(move(str));
                     new_password_observed = true;
                 }
             }
@@ -58,8 +59,10 @@ WebIDL::ExceptionOr<GC::Ref<PasswordCredential>> create_password_credential(JS::
             //       Note: By checking that newPasswordObserved is false, new-password fields take precedence over
             //             current-password fields.
             if (!new_password_observed && token.equals_ignoring_ascii_case("current-password"sv)) {
-                if (auto password = form_data->get(name.value()); password.has<String>())
-                    data.password = password.get<String>();
+                if (auto password = form_data->get(name.value()); password.has<String>()) {
+                    String const& str = password.get<String>();
+                    data.password = Core::SecretString(move(str));
+                }
             }
             //    - "photo"
             //      Set data’s iconURL member’s value to the result of executing formData’s get() method on name.

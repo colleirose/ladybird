@@ -47,9 +47,18 @@ CryptoKey::CryptoKey(JS::Realm& realm)
 void CryptoKey::finalize()
 {
     Base::finalize();
-    m_key_data.visit(
-        [](ByteBuffer& data) { secure_zero(data.data(), data.size()); },
-        [](auto& data) { secure_zero(reinterpret_cast<u8*>(&data), sizeof(data)); });
+    if (m_type != Bindings::KeyType::Public && !m_key_data.has<ByteBuffer>()) {
+        // ByteBuffer will be erased on its own (see CryptoKey.h), but other types we need to manually erase
+        auto& data = m_key_data.get<auto&>();
+        if (sizeof(data) > 0)
+            secure_memzero(reinterpret_cast<u8*>(&data), sizeof(data));
+
+        // FIX-BEFORE-PR: cleanup comments & whatever here after testing/fixing above
+        // m_key_data.visit([](auto& data) {
+        //     if (sizeof(data) > 0)
+        //         secure_memzero(reinterpret_cast<u8*>(&data), sizeof(data));
+        // });
+    }
 }
 
 void CryptoKey::initialize(JS::Realm& realm)

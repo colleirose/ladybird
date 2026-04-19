@@ -18,6 +18,29 @@ inline int openssl_print_errors(char const* str, size_t len, [[maybe_unused]] vo
     return 1;
 }
 
+inline void init_secure_heap()
+{
+    constexpr size_t MAX_ATTEMPTS = 3;
+    constexpr size_t TARGET_KB = 256;
+    constexpr size_t MIN_KB = 8;
+
+    static bool is_secure_heap_init = false;
+
+    if (!is_secure_heap_init) [[unlikely]] {
+        static size_t failed_attempts = 0;
+        // This allows OpenSSL to protect sensitive values in memory.
+        int res = CRYPTO_secure_malloc_init(TARGET_KB * 1024, MIN_KB * 1024);
+        if (res == 1) {
+            is_secure_heap_init = true;
+        } else {
+            warnln("failed to init OpenSSL secure malloc, error code {}, this is attempt number {}", res, failed_attempts);
+            failed_attempts++;
+            if (failed_attempts > MAX_ATTEMPTS)
+                is_secure_heap_init = true; // Give up on retrying.
+        }
+    }
+}
+
 namespace Crypto {
 
 #define OPENSSL_TRY_PTR(...)                                           \
@@ -54,9 +77,15 @@ public:                                                                 \
         openssl_prefix##_free(m_ptr);                                   \
     }                                                                   \
                                                                         \
+    class_name()                                                        \
+    {                                                                   \
+        init_secure_heap();                                             \
+    }                                                                   \
+                                                                        \
     class_name(class_name&& other)                                      \
         : m_ptr(other.leak_ptr())                                       \
     {                                                                   \
+        init_secure_heap();                                             \
     }                                                                   \
                                                                         \
     class_name& operator=(class_name&& other)                           \

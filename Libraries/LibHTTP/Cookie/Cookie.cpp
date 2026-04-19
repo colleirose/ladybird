@@ -60,6 +60,18 @@ SameSite same_site_from_string(StringView same_site_mode)
     return SameSite::Default;
 }
 
+bool is_cookie_likely_secret(VariantCookie cookie)
+{
+    // Determines if a cookie is likely to be a session cookie or similar secret value
+    return cookie.visit(
+        [](HTTP::Cookie::Cookie const& val) { return val.secure || val.http_only || val.host_only },
+        [](HTTP::Cookie::ParsedCookie const& val) {
+            return (val.secure_attribute_present
+                || val.http_only_attribute_present
+                || val.name.starts_with_bytes("__Host-"sv))
+        });
+}
+
 // https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis-22#section-5.1.2
 Optional<String> canonicalize_domain(URL::URL const& url)
 {

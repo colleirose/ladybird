@@ -35,7 +35,7 @@ ErrorOr<ByteBuffer> EdwardsCurve::generate_private_key()
     size_t key_size = 0;
     OPENSSL_TRY(EVP_PKEY_get_raw_private_key(key.ptr(), nullptr, &key_size));
 
-    auto buf = TRY(ByteBuffer::create_uninitialized(key_size));
+    auto buf = TRY(ByteBuffer::create_uninitialized(key_size, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_get_raw_private_key(key.ptr(), buf.data(), &key_size));
 
     return buf;
@@ -178,7 +178,7 @@ ErrorOr<ByteBuffer> ExchangeEdwardsCurve::compute_coordinate(ReadonlyBytes priva
     size_t key_size = 0;
     OPENSSL_TRY(EVP_PKEY_derive(ctx.ptr(), nullptr, &key_size));
 
-    auto buf = TRY(ByteBuffer::create_uninitialized(key_size));
+    auto buf = TRY(ByteBuffer::create_uninitialized(key_size, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_PKEY_derive(ctx.ptr(), buf.data(), &key_size));
 
     return buf;

@@ -75,17 +75,32 @@ class JS_API ArrayBuffer final : public Object {
     GC_DECLARE_ALLOCATOR(ArrayBuffer);
 
 public:
-    static ThrowCompletionOr<GC::Ref<ArrayBuffer>> create(Realm&, size_t, DataBlock::Shared = DataBlock::Shared::No);
-    static GC::Ref<ArrayBuffer> create(Realm&, ByteBuffer, DataBlock::Shared = DataBlock::Shared::No);
-    static GC::Ref<ArrayBuffer> create(Realm&, ByteBuffer*, DataBlock::Shared = DataBlock::Shared::No);
+    static ThrowCompletionOr<GC::Ref<ArrayBuffer>> create(Realm&, size_t, DataBlock::Shared = DataBlock::Shared::No, ByteBuffer::EraseBufferOnFree = ByteBuffer::EraseBufferOnFree::No);
+    static GC::Ref<ArrayBuffer> create(Realm&, ByteBuffer, DataBlock::Shared = DataBlock::Shared::No, ByteBuffer::EraseBufferOnFree = ByteBuffer::EraseBufferOnFree::No);
+    static GC::Ref<ArrayBuffer> create(Realm&, ByteBuffer*, DataBlock::Shared = DataBlock::Shared::No, ByteBuffer::EraseBufferOnFree = ByteBuffer::EraseBufferOnFree::No);
+
+    static ThrowCompletionOr<GC::Ref<ArrayBuffer>> create(Realm& realm, size_t size, ByteBuffer::EraseBufferOnFree erase_option);
+    static GC::Ref<ArrayBuffer> create(Realm& realm, ByteBuffer buffer, ByteBuffer::EraseBufferOnFree erase_option);
+    static GC::Ref<ArrayBuffer> create(Realm& realm, ByteBuffer* buffer, ByteBuffer::EraseBufferOnFree erase_option);
 
     virtual ~ArrayBuffer() override = default;
 
     size_t byte_length() const { return m_data_block.size(); }
 
     // [[ArrayBufferData]]
-    ByteBuffer& buffer() { return m_data_block.buffer(); }
-    ByteBuffer const& buffer() const { return m_data_block.buffer(); }
+    ByteBuffer& buffer(ByteBuffer::EraseBufferOnFree erase_option = ByteBuffer::EraseBufferOnFree::Unspecified)
+    {
+        ByteBuffer& buf = m_data_block.buffer();
+        buf.set_erase_on_free(erase_option);
+        return buf;
+    }
+
+    ByteBuffer const& buffer(ByteBuffer::EraseBufferOnFree erase_option = ByteBuffer::EraseBufferOnFree::Unspecified) const
+    {
+        ByteBuffer const& buf = m_data_block.buffer();
+        const_cast<ByteBuffer&>(buf).set_erase_on_free(erase_option);
+        return buf;
+    }
 
     // [[ArrayBufferMaxByteLength]]
     size_t max_byte_length() const { return m_max_byte_length.value(); }

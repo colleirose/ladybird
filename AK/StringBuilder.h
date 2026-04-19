@@ -92,6 +92,9 @@ public:
     [[nodiscard]] Utf16View utf16_string_view() const;
     void clear();
 
+    // Clear whatever data is in the buffer and ensure that it's erased from memory
+    void clear_sensitive();
+
     [[nodiscard]] size_t length() const;
     [[nodiscard]] bool is_empty() const;
     void trim(size_t count);

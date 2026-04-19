@@ -51,6 +51,26 @@ struct JsonWebKey {
     JS::ThrowCompletionOr<GC::Ref<JS::Object>> to_object(JS::Realm&);
 
     static JS::ThrowCompletionOr<JsonWebKey> parse(JS::Realm& realm, ReadonlyBytes data);
+
+    ~JsonWebKey()
+    {
+        // FIX-BEFORE-PR: cleanup the comments and dbgln stuff here once we know it works
+        // auto secret_values = { &(this->priv), &(this->k), &(this->d) };
+        auto secret_values = { &priv, &k, &d };
+        dbgln("aaa");
+        for (auto& val : secret_values) {
+            // String* ptr = val->ptr();
+            dbgln("bbb");
+            String* ptr = val->ptr();
+            if (ptr != nullptr)
+                secure_memzero(ptr);
+            // if (ptr != nullptr) {
+            //     dbgln("ccc");
+            //     ReadonlyBytes bytes = val->bytes();
+            //     secure_memzero(const_cast<u8*>(bytes.data()), bytes.size());
+            // }
+        }
+    }
 };
 
 }

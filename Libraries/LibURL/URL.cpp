@@ -56,7 +56,8 @@ void URL::set_username(StringView username)
 void URL::set_password(StringView password)
 {
     // To set the password given a url and password, set url’s password to the result of running UTF-8 percent-encode on password using the userinfo percent-encode set.
-    m_data->password = percent_encode(password, PercentEncodeSet::Userinfo);
+    String const& str = percent_encode(password, PercentEncodeSet::Userinfo);
+    m_data->password = Core::SecretString(move(str)); // FIXME: This particular usage is probably still leaving copies of the plaintext password due to the amount of unprotected uses
 }
 
 void URL::set_host(Host host)
@@ -223,6 +224,12 @@ String URL::serialize(ExcludeFragment exclude_fragment) const
 {
     // 1. Let output be url’s scheme and U+003A (:) concatenated.
     StringBuilder output;
+    bool erase_builder_on_exit = false;
+    ScopeGuard guard([&]() {
+        if (erase_builder_on_exit)
+            output.clear_sensitive();
+    });
+
     output.append(m_data->scheme);
     output.append(':');
 
@@ -239,7 +246,10 @@ String URL::serialize(ExcludeFragment exclude_fragment) const
             // 2. If url’s password is not the empty string, then append U+003A (:), followed by url’s password, to output.
             if (!m_data->password.is_empty()) {
                 output.append(':');
-                output.append(m_data->password);
+                String const& password = MUST(m_data->password.make_unsecured_string_copy());
+                output.append(password);
+                secure_memzero(&password);
+                erase_builder_on_exit = true;
             }
 
             // 3. Append U+0040 (@) to output.

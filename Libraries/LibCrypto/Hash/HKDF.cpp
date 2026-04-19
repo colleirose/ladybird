@@ -44,7 +44,7 @@ ErrorOr<ByteBuffer> HKDF::derive_key(Optional<ReadonlyBytes> maybe_salt, Readonl
         params[3] = OSSL_PARAM_octet_string(OSSL_KDF_PARAM_SALT, const_cast<u8*>(salt.data()), salt.size());
     }
 
-    auto buf = TRY(ByteBuffer::create_uninitialized(key_length_bytes));
+    auto buf = TRY(ByteBuffer::create_uninitialized(key_length_bytes, ByteBuffer::EraseBufferOnFree::Yes));
     OPENSSL_TRY(EVP_KDF_derive(ctx.ptr(), buf.data(), key_length_bytes, params));
 
     return buf;

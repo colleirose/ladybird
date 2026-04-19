@@ -42,7 +42,12 @@ public:
     Vector<Bindings::KeyUsage> internal_usages() const { return m_key_usages; }
 
     void set_extractable(bool extractable) { m_extractable = extractable; }
-    void set_type(Bindings::KeyType type) { m_type = type; }
+    void set_type(Bindings::KeyType type)
+    {
+        m_type = type;
+        if (type != KeyType::Public && m_key_data.has<ByteBuffer>())
+            m_key_data.get<ByteBuffer>().set_erase_on_free(true);
+    }
     void set_algorithm(GC::Ref<Object> algorithm) { m_algorithm = algorithm; }
     void set_usages(Vector<Bindings::KeyUsage>);
 

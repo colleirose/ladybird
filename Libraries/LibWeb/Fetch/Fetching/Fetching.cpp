@@ -12,6 +12,7 @@
 #include <AK/Base64.h>
 #include <AK/Debug.h>
 #include <AK/ScopeGuard.h>
+#include <LibCore/SecretString.h>
 #include <LibHTTP/Cache/MemoryCache.h>
 #include <LibHTTP/Cache/Utilities.h>
 #include <LibHTTP/Method.h>
@@ -1777,7 +1778,7 @@ GC::Ref<PendingResponse> http_network_or_cache_fetch(JS::Realm& realm, Infrastru
             // 2. If httpRequest’s header list does not contain `Authorization`, then:
             if (!http_request->header_list()->contains("Authorization"sv)) {
                 // 1. Let authorizationValue be null.
-                auto authorization_value = Optional<String> {};
+                Optional<Core::SecretString> authorization_value;
 
                 // 2. If there’s an authentication entry for httpRequest and either httpRequest’s use-URL-credentials
                 //    flag is unset or httpRequest’s current URL does not include credentials, then set
@@ -1791,13 +1792,17 @@ GC::Ref<PendingResponse> http_network_or_cache_fetch(JS::Realm& realm, Infrastru
                 else if (http_request->current_url().includes_credentials() && is_authentication_fetch == IsAuthenticationFetch::Yes) {
                     auto const& url = http_request->current_url();
                     auto payload = MUST(String::formatted("{}:{}", URL::percent_decode(url.username()), URL::percent_decode(url.password())));
-                    authorization_value = MUST(encode_base64(payload.bytes()));
+                    // NB: Constant-time encoding doesn't really mattter here,
+                    // but we want secret authorization values to be erased from memory.
+                    authorization_value = MUST(Crypto::SecureBase64Encode(payload.bytes()));
+                    secure_memzero(&payload);
                 }
 
                 // 4. If authorizationValue is non-null, then append (`Authorization`, authorizationValue) to
                 //    httpRequest’s header list.
                 if (authorization_value.has_value()) {
-                    auto header = HTTP::Header::isomorphic_encode("Authorization"sv, *authorization_value);
+                    auto header = HTTP::Header::isomorphic_encode("Authorization"sv, *authorization_value.view());
+                    secure_memzero(&str);
                     http_request->header_list()->append(move(header));
                 }
             }

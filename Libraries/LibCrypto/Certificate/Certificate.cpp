@@ -300,7 +300,7 @@ ErrorOr<PrivateKey> parse_private_key_info(ASN1::Decoder& decoder, Vector<String
     READ_OBJECT(OctetString, StringView, value);
     POP_SCOPE();
 
-    private_key.raw_key = TRY(ByteBuffer::copy(value.bytes()));
+    private_key.raw_key = TRY(ByteBuffer::copy(value.bytes(), ByteBuffer::EraseBufferOnFree::Yes));
 
     if (private_key.algorithm.identifier.span() == ASN1::rsa_encryption_oid.span()) {
         auto maybe_key = Crypto::PK::RSA::parse_rsa_key(value.bytes(), true, current_scope);

@@ -85,9 +85,9 @@ ErrorOr<ByteBuffer> ChaCha20Poly1305::decrypt(ReadonlyBytes key, ReadonlyBytes n
         OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), nullptr, &aad_len, aad.data(), aad.size()));
     }
 
-    auto plaintext = TRY(ByteBuffer::create_uninitialized(ciphertext.size()));
-    int out_len = 0;
+    auto plaintext = TRY(ByteBuffer::create_uninitialized(ciphertext.size(), ByteBuffer::EraseBufferOnFree::Yes));
 
+    int out_len = 0;
     OPENSSL_TRY(EVP_DecryptUpdate(ctx.ptr(), plaintext.data(), &out_len, ciphertext.data(), ciphertext.size()));
 
     int final_len = 0;

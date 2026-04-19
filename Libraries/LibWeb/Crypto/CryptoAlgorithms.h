@@ -807,6 +807,8 @@ struct Argon2Params : public AlgorithmParams {
         , secret_value(secret_value)
         , associated_data(associated_data)
     {
+        if (secret_value.has_value())
+            secret_value.set_erase_on_free(true);
     }
 
     ByteBuffer nonce;
