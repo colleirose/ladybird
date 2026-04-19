@@ -95,15 +95,14 @@ struct PlaybackStreamWASAPI::AudioState : public AtomicRefCounted<PlaybackStream
 
     WAVEFORMATEXTENSIBLE wave_format;
     UINT32 buffer_frame_count;
-    HANDLE buffer_event = 0;
+    Core::Windows::OwnedHandle buffer_event;
 
     PlaybackStreamWASAPI::AudioDataRequestCallback data_request_callback;
     Function<void()> underrun_callback;
 
     Threading::Mutex task_queue_mutex;
     Queue<Variant<TaskPlay, TaskDrainAndSuspend, TaskDiscardAndSuspend>> task_queue;
-    // FIXME: Create a owning handle type to be shared in the codebase
-    HANDLE task_event = 0;
+    Core::Windows::OwnedHandle task_event;
 
     bool playing = false;
     bool drain_and_suspend = false;
@@ -123,14 +122,6 @@ PlaybackStreamWASAPI::AudioState::AudioState()
     VERIFY(task_event);
 }
 
-PlaybackStreamWASAPI::AudioState::~AudioState()
-{
-    if (buffer_event)
-        CloseHandle(buffer_event);
-    if (task_event)
-        CloseHandle(task_event);
-}
-
 ALWAYS_INLINE AK::Duration PlaybackStreamWASAPI::total_time_played_with_com_initialized(PlaybackStreamWASAPI::AudioState& state)
 {
     UINT64 position;
@@ -147,8 +138,8 @@ PlaybackStreamWASAPI::~PlaybackStreamWASAPI()
 {
     m_state->exit_requested.store(true, MemoryOrder::memory_order_release);
     // Poke the event to wake the thread up from wait
-    VERIFY(m_state->buffer_event != NULL);
-    SetEvent(m_state->buffer_event);
+    VERIFY(m_state->buffer_event.get() != NULL);
+    SetEvent(m_state->buffer_event.get());
 }
 
 NonnullRefPtr<PlaybackStream::CreatePromise> PlaybackStream::create(OutputState initial_output_state, u32 target_latency_ms, AudioDataRequestCallback&& data_callback)
@@ -307,7 +298,7 @@ NonnullRefPtr<PlaybackStream::CreatePromise> PlaybackStreamWASAPI::create(Output
         return promise;
     }
 
-    TRY_HR(state->audio_client->SetEventHandle(state->buffer_event));
+    TRY_HR(state->audio_client->SetEventHandle(state->buffer_event.get()));
     TRY_HR(state->clock->GetFrequency(&state->audio_client_clock_frequency));
 
     if (initial_output_state == OutputState::Playing)
@@ -346,11 +337,11 @@ int PlaybackStreamWASAPI::AudioState::render_thread_loop(PlaybackStreamWASAPI::A
 
     VERIFY(timeBeginPeriod(1) == TIMERR_NOERROR);
     DWORD task_index = 0;
-    HANDLE task_handle = AvSetMmThreadCharacteristicsW(L"Pro Audio", &task_index);
+    Core::Windows::OwnedHandle task_handle = AvSetMmThreadCharacteristicsW(L"Pro Audio", &task_index);
     ScopeGuard revert_thread_priority = [&task_handle] { AvRevertMmThreadCharacteristics(task_handle); };
 
     while (!state.exit_requested.load(MemoryOrder::memory_order_acquire)) {
-        Array handles = { state.task_event, state.buffer_event };
+        Array handles = { state.task_event.get(), state.buffer_event.get() };
         DWORD result = WaitForMultipleObjects(handles.size(), handles.data(), FALSE, INFINITE);
         switch (result) {
         case WAIT_OBJECT_0: {
@@ -461,7 +452,7 @@ NonnullRefPtr<Core::ThreadedPromise<AK::Duration>> PlaybackStreamWASAPI::resume(
 
     m_state->task_queue_mutex.lock();
     m_state->task_queue.enqueue(move(task));
-    SetEvent(m_state->task_event);
+    SetEvent(m_state->task_event.get());
     m_state->task_queue_mutex.unlock();
 
     return promise;
@@ -474,7 +465,7 @@ NonnullRefPtr<Core::ThreadedPromise<void>> PlaybackStreamWASAPI::drain_buffer_an
 
     m_state->task_queue_mutex.lock();
     m_state->task_queue.enqueue(move(task));
-    SetEvent(m_state->task_event);
+    SetEvent(m_state->task_event.get());
     m_state->task_queue_mutex.unlock();
 
     return promise;
@@ -487,7 +478,7 @@ NonnullRefPtr<Core::ThreadedPromise<void>> PlaybackStreamWASAPI::discard_buffer_
 
     m_state->task_queue_mutex.lock();
     m_state->task_queue.enqueue(move(task));
-    SetEvent(m_state->task_event);
+    SetEvent(m_state->task_event.get());
     m_state->task_queue_mutex.unlock();
 
     return promise;

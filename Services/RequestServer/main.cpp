@@ -16,6 +16,7 @@
 #include <LibHTTP/Cache/DiskCache.h>
 #include <LibIPC/SingleServer.h>
 #include <LibMain/Main.h>
+#include <LibWebView/Sandbox/Sandbox.h>
 #include <RequestServer/ConnectionFromClient.h>
 #include <RequestServer/Resolver.h>
 #include <RequestServer/ResourceSubstitutionMap.h>
@@ -37,6 +38,8 @@ static void handle_signal(int signal)
 ErrorOr<int> ladybird_main(Main::Arguments arguments)
 {
     AK::set_rich_debug_enabled(true);
+    // FIX-BEFORE-PR: doing this might actually just not work because these processes should be spawning with the sandboxing already applied (and therefore this would be both unnecessary and also not possible due to seccomp being forbidden)
+    TRY(WebView::Sandbox::ApplySyscallFiltersToCurrentProcess(WebView::ProcessType::RequestServer));
 
     Vector<ByteString> certificates;
     StringView mach_server_name;

@@ -177,7 +177,8 @@
     "vulkan",
     "vulkan-headers",
     "woff2",
-    "zlib"
+    "zlib",
+    "libseccomp"
   ],
   "features": {
     "gtk": {
@@ -256,6 +257,10 @@
     }
   },
   "overrides": [
+    {
+      "name": "libseccomp",
+      "version": "2.6.0"
+    },
     {
       "name": "angle",
       "version": "chromium_7258#0"

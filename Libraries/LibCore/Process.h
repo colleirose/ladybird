@@ -3,6 +3,7 @@
  * Copyright (c) 2022, MacDue <macdue@dueutil.tech>
  * Copyright (c) 2023, Sam Atkins <atkinssj@serenityos.org>
  * Copyright (c) 2024, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2026, Colleirose <criticskate@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -11,7 +12,9 @@
 
 #include <AK/ByteString.h>
 #include <AK/Forward.h>
+#include <AK/Platform.h>
 #include <AK/String.h>
+#include <AK/Variant.h>
 #include <LibCore/Export.h>
 #include <LibCore/File.h>
 
@@ -37,6 +40,20 @@ struct DupFd {
 
 }
 
+#ifdef AK_OS_WINDOWS
+enum WindowsStartupOptionsType {
+    Unspecified,
+    Token,
+    AttributeList,
+}
+
+struct ProcessWindowsOptions {
+    WindowsStartupOptionsType startup_type { WindowsStartupOptionsType::Unspecified };
+    Variant<HANDLE, LPPROC_THREAD_ATTRIBUTE_LIST> startup_val { NULL };
+    Utf16String alt_desktop_name { "" };
+}
+#endif
+
 struct ProcessSpawnOptions {
     StringView name {};
     ByteString executable {};
@@ -45,6 +62,9 @@ struct ProcessSpawnOptions {
 
     using FileActionType = Variant<FileAction::OpenFile, FileAction::CloseFile, FileAction::DupFd>;
     Vector<FileActionType> file_actions {};
+#ifdef AK_OS_WINDOWS
+    ProcessWindowsOptions windows_options {};
+#endif
 };
 
 class CORE_API Process {

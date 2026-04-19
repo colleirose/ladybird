@@ -38,6 +38,12 @@ if (WIN32)
         SystemWindows.cpp
         TCPServerWindows.cpp
         UDPServerWindows.cpp
+        Windows/Windows.cpp
+        Windows/WindowsMemory.cpp
+        Windows/AccessControl/ACL.cpp
+        Windows/AccessControl/Descriptor.cpp
+        Windows/AccessControl/SID.cpp
+        Windows/AccessControl/Token.cpp
     )
 else()
     list(APPEND SOURCES

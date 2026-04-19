@@ -34,6 +34,7 @@ set(SOURCES
     WebUI/BookmarksUI.cpp
     WebUI/ProcessesUI.cpp
     WebUI/SettingsUI.cpp
+    Sandbox/Sandbox.cpp
 )
 
 set(GENERATED_SOURCES ${CURRENT_LIB_GENERATED})
@@ -74,9 +75,37 @@ compile_ipc(${LADYBIRD_SOURCE_DIR}/Services/WebContent/WebDriverClient.ipc ${CMA
 compile_ipc(${LADYBIRD_SOURCE_DIR}/Services/WebContent/WebDriverServer.ipc ${CMAKE_BINARY_DIR}/Services/WebContent/WebDriverServerEndpoint.h)
 compile_ipc(${LADYBIRD_SOURCE_DIR}/Services/WebContent/WebUIClient.ipc ${CMAKE_BINARY_DIR}/Services/WebContent/WebUIClientEndpoint.h)
 compile_ipc(${LADYBIRD_SOURCE_DIR}/Services/WebContent/WebUIServer.ipc ${CMAKE_BINARY_DIR}/Services/WebContent/WebUIServerEndpoint.h)
+if(LINUX)
+    list(APPEND SOURCES 
+        Sandbox/Linux/bubblewrap.cpp
+        Sandbox/Linux/LinuxSandbox.cpp
+    )
+elseif(WIN32)
+    list(APPEND SOURCES
+        Sandbox/Windows/AppContainer.cpp
+        Sandbox/Windows/ProcessMitigations.cpp
+        Sandbox/Windows/SandboxWindows.cpp
+        Sandbox/Windows/Token.cpp
+        Sandbox/Windows/WindowObject.cpp
+    )
+endif()
+
 
 ladybird_lib(LibWebView webview EXPLICIT_SYMBOL_EXPORT)
 target_link_libraries(LibWebView PRIVATE LibCore LibDatabase LibDevTools LibFileSystem LibGfx LibHTTP LibImageDecoderClient LibIPC LibRequests LibJS LibWeb LibUnicode LibURL LibSyntax LibTextCodec)
+
+if(LINUX)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(libseccomp REQUIRED IMPORTED_TARGET libseccomp)
+    target_link_libraries(LibWebView PRIVATE PkgConfig::libseccomp)
+elseif(WIN32)
+    target_link_libraries(LibWebView PRIVATE advapi32.lib)
+    target_link_libraries(LibWebView PRIVATE Userenv.lib)
+endif()
+
+if (APPLE)
+    target_link_libraries(LibWebView PRIVATE LibThreading)
+endif()
 
 # Third-party
 if (HAS_FONTCONFIG)

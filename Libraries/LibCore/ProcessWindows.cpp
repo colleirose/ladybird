@@ -4,11 +4,16 @@
  * Copyright (c) 2023-2024, Sam Atkins <atkinssj@serenityos.org>
  * Copyright (c) 2024, Tim Flynn <trflynn89@serenityos.org>
  * Copyright (c) 2024, stasoid <stasoid@yahoo.com>
+ * Copyright (c) 2026, Colleirose <criticskate@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Format.h>
+#include <AK/ScopeGuard.h>
 #include <AK/String.h>
+#include <AK/StringView.h>
+#include <AK/Try.h>
 #include <AK/Utf16View.h>
 #include <AK/Vector.h>
 #include <AK/Windows.h>
@@ -40,8 +45,16 @@ Process Process::current()
 
 ErrorOr<Process> Process::spawn(ProcessSpawnOptions const& options)
 {
-    // file actions are not supported
-    VERIFY(options.file_actions.is_empty());
+    if (!options.file_actions.is_empty())
+        return Error::from_string_literal("file actions are not supported");
+
+    auto windows_options = options.windows_options;
+
+    if (windows_options.startup_type == WindowsStartupOptionsType::Unspecified)
+        return Error::from_string_literal("invalid startup type provided");
+
+    if (windows_options.alt_desktop_name == "")
+        return Error::from_string_literal("invalid desktop name provided");
 
     StringBuilder builder;
     if (!options.search_for_executable_in_path && !options.executable.find_any_of("\\/:"sv).has_value())
@@ -55,25 +68,58 @@ ErrorOr<Process> Process::spawn(ProcessSpawnOptions const& options)
     builder.append('\0');
     ByteBuffer command_line = TRY(builder.to_byte_buffer());
 
-    STARTUPINFO startup_info = {};
+    // Actual process spawn
     PROCESS_INFORMATION process_info = {};
+    ScopeGuard guard = [&] {
+        if (process_info.hThread)
+            CloseHandle(process_info.hThread);
+    };
 
-    BOOL result = CreateProcess(
-        NULL,
-        (char*)command_line.data(),
-        NULL, // process security attributes
-        NULL, // primary thread security attributes
-        TRUE, // handles are inherited
-        0,    // creation flags
-        NULL, // use parent's environment
-        NULL, // working directory
-        &startup_info,
-        &process_info);
+    DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
+    BOOL result;
+    auto last_error;
+    if (windows_options.startup_type == WindowsStartupOptionsType::AttributeList) {
+        creation_flags &= EXTENDED_STARTUPINFO_PRESENT;
+        STARTUPINFOEXW startup_info_ex {};
+        startup_info_ex.cb = sizeof(STARTUPINFOEXW);
+        startup_info_ex.StartupInfo.lpDesktop = const_cast<LPWSTR>(windows_options.alt_desktop_name);
+        startup_info_ex.lpAttributeList = windows_options.startup_val;
+        result = CreateProcessW(
+            NULL,                                               // application name
+            (char*)command_line.data(),                         // process to run
+            NULL,                                               // process security attributes
+            NULL,                                               // primary thread security attributes
+            TRUE,                                               // handles are inherited
+            creation_flags,                                     // creation flags
+            NULL,                                               // use parent's environment
+            NULL,                                               // working directory
+            reinterpret_cast<LPSTARTUPINFOW>(&startup_info_ex), // startup info
+            &process_info                                       // process info
+        );
+        last_error = GetLastError();
+        DeleteProcThreadAttributeList(startup_info_ex.lpAttributeList);
+        free(startup_info_ex.lpAttributeList);
+    } else {
+        STARTUPINFOW startup_info = {};
+        startup_info.lpDesktop = const_cast<LPWSTR>(windows_options.alt_desktop_name);
+        result = CreateProcessAsUserW(
+            windows_options.startup_val, // low-privileged token to run as
+            NULL,                        // application name
+            (char*)command_line.data(),  // process to run
+            NULL,                        // process security attributes
+            NULL,                        // primary thread security attributes
+            TRUE,                        // handles are inherited
+            creation_flags,              // creation flags
+            NULL,                        // use parent's environment
+            NULL,                        // working directory
+            &startup_info,               // startup info
+            &process_info                // process info
+        );
+        last_error = GetLastError();
+    }
 
     if (!result)
-        return Error::from_windows_error();
-
-    CloseHandle(process_info.hThread);
+        return Error::from_windows_error(last_error);
 
     return Process(process_info.hProcess);
 }
@@ -81,6 +127,7 @@ ErrorOr<Process> Process::spawn(ProcessSpawnOptions const& options)
 ErrorOr<Process> Process::spawn(StringView path, ReadonlySpan<ByteString> arguments)
 {
     return spawn({
+        .process_type = type,
         .executable = path,
         .arguments = Vector<ByteString> { arguments },
     });
@@ -94,6 +141,7 @@ ErrorOr<Process> Process::spawn(StringView path, ReadonlySpan<StringView> argume
         backing_strings.append(argument);
 
     return spawn({
+        .process_type = type,
         .executable = path,
         .arguments = backing_strings,
     });

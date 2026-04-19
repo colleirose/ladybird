@@ -15,6 +15,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
+    <!-- FIXME: Code changes needed to remove allowNativeHeapPointerTagging="false" and enable memTagMode="async" -->
     <application
         android:allowBackup="true"
         android:allowNativeHeapPointerTagging="false"

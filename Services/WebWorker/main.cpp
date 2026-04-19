@@ -24,6 +24,7 @@
 #include <LibWeb/Platform/EventLoopPlugin.h>
 #include <LibWeb/Platform/FontPlugin.h>
 #include <LibWebView/Plugins/ImageCodecPlugin.h>
+#include <LibWebView/Sandbox/Sandbox.h>
 #include <LibWebView/Utilities.h>
 #include <WebWorker/ConnectionFromClient.h>
 
@@ -47,6 +48,7 @@ static ErrorOr<Web::Bindings::AgentType> agent_type_from_string(StringView type)
 ErrorOr<int> ladybird_main(Main::Arguments arguments)
 {
     AK::set_rich_debug_enabled(true);
+    TRY(WebView::Sandbox::ApplySyscallFiltersToCurrentProcess(WebView::ProcessType::WebWorker));
 
     StringView serenity_resource_root;
     StringView worker_type_string;

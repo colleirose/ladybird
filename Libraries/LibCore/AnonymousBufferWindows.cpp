@@ -30,10 +30,7 @@ AnonymousBufferImpl::~AnonymousBufferImpl()
 
 ErrorOr<NonnullRefPtr<AnonymousBufferImpl>> AnonymousBufferImpl::create(size_t size)
 {
-    HANDLE map_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, size >> 32, size & 0xFFFFFFFF, NULL);
-    if (!map_handle)
-        return Error::from_windows_error();
-
+    HANDLE map_handle = TRY(Windows::CreateLowPrivilegedAnonFileMap(size >> 32, size & 0xFFFFFFFF));
     return create(to_fd(map_handle), size);
 }
 

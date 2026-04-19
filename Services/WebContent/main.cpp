@@ -34,6 +34,7 @@
 #include <LibWeb/Platform/FontPlugin.h>
 #include <LibWeb/WebIDL/Tracing.h>
 #include <LibWebView/Plugins/ImageCodecPlugin.h>
+#include <LibWebView/Sandbox/Sandbox.h>
 #include <LibWebView/SiteIsolation.h>
 #include <LibWebView/Utilities.h>
 #include <WebContent/ConnectionFromClient.h>
@@ -107,6 +108,7 @@ static ErrorOr<void> connect_to_image_decoder(IPC::TransportHandle const& handle
 ErrorOr<int> ladybird_main(Main::Arguments arguments)
 {
     AK::set_rich_debug_enabled(true);
+    TRY(WebView::Sandbox::ApplySyscallFiltersToCurrentProcess(WebView::ProcessType::WebContent));
 
 #if !defined(AK_OS_WINDOWS)
     install_crash_signal_handlers();

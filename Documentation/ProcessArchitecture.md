@@ -12,7 +12,7 @@ Every instance of the **Browser** application can have one or more tabs open. Ea
 
 Two important aspects of web browsing are further separated from the **WebContent** process: *network requests* and *image decoding*, segregated to the **RequestServer** and **ImageDecoder** processes respectively.
 
-All processes are aggressively sandboxed using the `pledge()` and `unveil()` mechanisms. Furthermore, all processes except **Browser** run as an unprivileged user, separate from the primary logged-in desktop user.
+All processes are aggressively sandboxed using platform-specific sandboxing mechanisms, like seccomp and AppContainer. See `Sandbox.md` for information on the sandboxing mechanisms used on each platform.
 
 ### Process: WebContent
 
